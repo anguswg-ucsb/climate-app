@@ -65,6 +65,80 @@ zoom_to_catch = function(map, df, catchment){
 
 
 
+# bb <- bb_poly(buffer) %>%
+#   st_sf() %>%
+#   st_transform(4326)
 
 
 
+# bb = buffer %>%
+#   st_bbox()
+# bb_pts <- data.frame(x = c(bb[1], bb[3]), y = c(bb[2], bb[4]))
+#
+# lat = 35.6643
+# lng = -96.91935
+# pt <- data.frame(lat, lng)
+# pt <- sf::st_as_sf(pt,
+#                    coords = c("lng", "lat"),
+#                    crs = 4326)
+# buffer <- pt %>%
+#   st_transform(5070) %>%
+#   st_buffer(30000) %>%
+#   st_transform(4326)
+#
+# bb = buffer %>%
+#   st_bbox() %>%
+#   st_as_sfc() %>%
+#   st_transform(4326) %>%
+#   st_as_sf()
+#
+# rain <- climateR::getGridMET(AOI = bb, "tmax", startDate = "2010-01-01")
+#
+# values(rain$tmax)
+#
+# mapview::mapView(rain$tmax, layer.name = "raster")
+#
+# pal <- colorNumeric(c("#0C2C84", "#41B6C4", "#FFFFCC"), values(r),
+#                     na.color = "transparent")
+#
+#
+#
+#
+# remotes::install_github("mikejohnson51/AOI") # suggested!
+# remotes::install_github("mikejohnson51/climateR")
+#
+# aoi <- aoi_get(state = "Oklahoma")
+# plot(bb)
+# class(bb)
+# rain <- climateR::getGridMET(AOI = bb, "tmax", startDate = "2010-01-01")
+#
+# mapview::mapView(bb)
+#
+# tmax <- rain$tmax[[1]]
+#
+#
+# leaflet::leaflet() %>%
+#   addProviderTiles(providers$OpenStreetMap) %>%
+#   leaflet::addRasterImage(x = tmax)
+#   addPolygons(data = polylist$tmax, fillColor = ~polylist$tmax$values, color = "red") %>%
+#   leaflet::add (data = rain$prcp[[1]])
+#
+#
+# runoff <- climateR::getTerraClim(AOI = pt, param = "q",
+#                                  startDate = "1993-01-01",
+#                                  endDate = "2015-01-01")
+# polylist = lapply(as.list(rain), rasterToPolygons)
+#
+# polylist$tmax
+#
+# mapview::mapview(polylist$tmax)
+#
+# runoff$date <- paste0(runoff$date, "-01")
+# runoff$date <- as.Date(runoff$date)
+# rownames(runoff) <- runoff$date
+# runoff <- select(runoff, q)
+#
+# dygraph(data = runoff)
+#
+#
+#

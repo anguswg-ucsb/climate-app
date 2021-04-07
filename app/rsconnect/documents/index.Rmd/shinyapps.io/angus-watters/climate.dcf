@@ -1,0 +1,12 @@
+name: climate
+title: climate
+username:
+account: angus-watters
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 3890917
+bundleId: 4415883
+url: https://angus-watters.shinyapps.io/climate/
+when: 1617197097.04593
+asMultiple: FALSE
+asStatic: FALSE
