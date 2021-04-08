@@ -53,17 +53,16 @@ Inputs {.sidebar}
 
 ### Model Filters
 ```{r}
-dateRangeInput("dateTS", label = "Date Range Input",
-               start = "1993-01-01",
-               end = "2018-12-31",
-               min = "1993-01-01",
-               max = "2018-12-31",
+dateInput("dateTS", label = "Date Input",
+               value = (Sys.Date() -1),
+               min = "1980-01-01",
+               max = (Sys.Date() -1),
                format = "yyyy mm dd",
                weekstart = 1)
 selectInput("variable1",
             label = "Variable", 
             choices = c('prcp', 'rhmax', 'rhmin', 'shum', 'srad', 'wind_dir', 'tmin', 'tmax', 'wind_vel', 'burn_index', 'fmoist_100', 'fmoist_1000', 'energy_release', 'palmer', 'pet_alfalfa', 'pet_grass', 'vpd'))
-
+verbatimTextOutput("dateInputText")
 
 ```
 
@@ -113,9 +112,9 @@ leafletOutput("catchMap2")
           st_buffer(0.15) %>% 
           st_bbox() %>% 
           as.vector()
-      temp <- climateR::getGridMET(AOI = bb, "tmax", startDate = "2010-01-01")
-      tmax <- temp$tmax[[1]]
- 
+      # temp <- climateR::getGridMET(AOI = bb, "tmax", startDate = "2010-01-01")
+      # tmax <- temp$tmax[[1]]
+
     leafletProxy("catchMap") %>% 
       clearMarkers() %>%
       clearShapes() %>% 
@@ -179,7 +178,7 @@ observeEvent(input$submitButton, {
           st_bbox() %>%
           as.vector()
       var <- param()
-      rast <- climateR::getGridMET(AOI = bb, var, startDate = "2010-01-01")
+      rast <- climateR::getGridMET(AOI = bb, var, startDate = dateText())
       print("raster1")
       print(var)
       
@@ -194,6 +193,12 @@ observeEvent(input$submitButton, {
   }
 })
 
+dateText <- eventReactive(input$submitButton, {
+    format.Date(input$dateTS)
+  })
+output$dateInputText <- renderText({
+   dateText()
+  })
 # output$catchMap2 <- renderLeaflet({
 #  rasterData()
 # })
@@ -205,36 +210,35 @@ Row
 -----------------------------------------------------------------------
 ### graph1
 ```{r}
-# dygraphOutput ('graph1')
+dygraphOutput ('graph1')
 ```
 
 ```{r, fig.keep='none'}
-# graphData1 <- eventReactive(input$submitButton, {
-#   if(input$variable1 == "aet") {
-#         click <<- input$catchMap_click %>%
-#             data.frame() %>%
-#             dplyr::select(lat,lng)
-#         print(click)
-#         pt <- sf::st_as_sf(click,
-#                             coords = c("lng", "lat"),
-#                             crs = 4326)
-# 
-#         print("evap")
-#         evap <- climateR::getTerraClim(AOI = pt, param = "aet",
-#                                     startDate = "1993-01-01",
-#                                     endDate = "2015-01-01")
-#         evap$date <- paste0(evap$date, "-01")
-#         evap$date <- as.Date(evap$date)
-#         evap <- evap %>% rename(AET = aet)
-#         rownames(evap) <- evap$date
-# 
-#         dygraph(data = select(evap,AET),
-#                 ylab = "Water volume (mm)") %>%
-#           dyHighlight(highlightCircleSize = 4,
-#                     highlightSeriesBackgroundAlpha = .4) %>%
-#               dyOptions(colors = c("darkred"),
-#                   fillGraph = TRUE)
-# 
+graphData1 <- eventReactive(input$submitButton, {
+    if(!is.null(input$variable1)) {
+        click <- input$catchMap_click %>%
+            data.frame() %>%
+            dplyr::select(lat,lng)
+        print(click)
+        pt <- sf::st_as_sf(click,
+                            coords = c("lng", "lat"),
+                            crs = 4326)
+        var <- param()
+        print("evap")
+        clim <- climateR::getTerraClim(AOI = pt, param = var,
+                                    startDate = "1993-01-01",
+                                    endDate = "2015-01-01")
+        clim$date <- paste0(clim$date, "-01")
+        clim$date <- as.Date(clim$date)
+        rownames(clim) <- clim$date
+
+        dygraph(data = dplyr::select(clim, var)) %>%
+          dyHighlight(highlightCircleSize = 4,
+                    highlightSeriesBackgroundAlpha = .4) %>%
+              dyOptions(colors = c("darkred"),
+                  fillGraph = TRUE)
+    }
+})
 #   } else if (input$variable1 == "water_deficit") {
 #     click <<- input$catchMap_click %>%
 #       data.frame() %>%
@@ -541,7 +545,7 @@ Row
 #                   fillGraph = TRUE)
 #   }
 # })
-# output$graph1 <- renderDygraph({
-#    graphData1()
-#   })
+output$graph1 <- renderDygraph({
+   graphData1()
+  })
 ```    

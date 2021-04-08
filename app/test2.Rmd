@@ -78,11 +78,10 @@ Inputs {.sidebar}
 
 ### Model Filters
 ```{r}
-dateRangeInput("dateTS", label = "Date Range Input",
-               start = "1993-01-01",
-               end = "2018-12-31",
-               min = "1993-01-01",
-               max = "2018-12-31",
+dateInput("dateTS", label = "Date Input",
+               value = (Sys.Date() -1),
+               min = "1980-01-01",
+               max = (Sys.Date() -1),
                format = "yyyy mm dd",
                weekstart = 1)
 selectInput("variable1",
@@ -93,7 +92,7 @@ verbatimTextOutput("buttonInputText")
 # verbatimTextOutput("paramText")
 verbatimTextOutput("varDropdownText")
 verbatimTextOutput("bbText")
-
+verbatimTextOutput("dateInputText")
 ```
 
 ```{r context = "server"}
@@ -112,7 +111,12 @@ buttonText <- eventReactive(input$submitButton, {
 output$buttonInputText <- renderText({
    buttonText()
   })
-
+dateText <- eventReactive(input$submitButton, {
+    format.Date(input$dateTS)
+  })
+output$dateInputText <- renderText({
+   dateText()
+  })
 # paramText <- eventReactive(input$submitButton, {
 #     paste0(param())
 #   })
@@ -156,156 +160,33 @@ leafletOutput("catchMap2")
 ```
 
 ```{r context = "server"}
-# Clicking on map 1 outputs Value boxes on both pages + catchment polygons + Dat table + info panel
-  observeEvent(input$catchMap_click, {
-   if(!is.null(input$catchMap_click)) {
-    click <- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-    print(click)
-    pt <- sf::st_as_sf(click, 
-                        coords = c("lng", "lat"), 
-                        crs = 4326)
-    
-    print("map1_click")
-    
-    # bb <- pt %>%
-    #     st_transform(5070) %>%
-    #     st_buffer(30000) %>% 
-    #     st_transform(4326)
-    # output$comidBox <- renderValueBox({
-    # valueBox(value = paste("COMID: ", comid)) })
-    
-    # fly to bounds
-    # bounds <- st_bbox(bb) %>% 
-    #       st_as_sfc() %>%
-    #       st_buffer(0.2) %>% 
-    #       st_bbox() %>% 
-    #       as.vector()
-
-      buffer <- pt %>%
-          st_transform(5070) %>%
-          st_buffer(30000)
-      bb = buffer %>%
-          st_bbox() %>%
-          st_as_sfc() %>%
-          st_transform(4326) %>%
-          st_as_sf()
-      # Map 2 fly to bounds
-      bounds <- st_bbox(bb) %>% 
-          st_as_sfc() %>%
-          st_buffer(0.15) %>% 
-          st_bbox() %>% 
-          as.vector()
-      
-      # box <- bb2()
-      # variable <- param()
-      # clim <- climateR::getGridMET(AOI = box, variable, startDate = "2010-01-01")
-      # variable <- clim$variable[[1]]
-      
- 
-    leafletProxy("catchMap") %>% 
-      clearMarkers() %>%
-      clearShapes() %>% 
-      addMarkers(data = pt) %>% 
-       addPolygons(data = bb,
-                   fillColor = 'red',
-                   col = "black",
-                   weight = 2) %>%
-    flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
-    
-
-# 
-#     leafletProxy("catchMap2") %>%
-#       clearShapes() %>%
-#       clearImages() %>%
-#       # addRasterImage(x = clim) %>%
-#        addMarkers(data = pt) %>%
-#        addPolygons(data = bb,
-#                    fillColor = 'red',
-#                    col = "black",
-#                    weight = 2) %>%
-#       flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
-   }
-  })
-# # catchMap and catchMap2 are linked while zooming
-#   observe({ # Observer to respond to zoom / pan of map1 and apply to map2
-#     coords <- input$catchMap_center
-#     zoom <- input$catchMap_zoom
-#     print(coords)
-#     print(zoom)
-#     if (!is.null(coords)) {
-#       leafletProxy("catchMap2") %>%
-#         setView(lat = coords$lat, lng = coords$lng, zoom = zoom)
-#     }
-# })
-#   # catchMap and catchMap2 are linked while zooming
-#   observe({ # Observer to respond to zoom / pan of map1 and apply to map2
-#     if(is.null(input$variable1)) {
-#       NULL
-#     } else if (!is.null(var)){
-#     var <- input$variable1
-#     box <- bb2()
-#     clim <- climateR::getGridMET(AOI = box, var, startDate = "2010-01-01")
-#     r <- clim$var[[1]]
-#     print(var)
-#     print(box)
-#     
-#     leafletProxy("catchMap2") %>%
-#         clearShapes() %>%
-#         clearImages() %>%
-#         addRasterImage(x = r)
-#     }
-# })
-# 
-# 
-observeEvent(input$submitButton, {
-  if(!is.null(input$catchMap_click)) {
-    click <- input$catchMap_click %>%
-      data.frame() %>%
-      dplyr::select(lat,lng)
-    print(click)
-    pt <- sf::st_as_sf(click,
-                        coords = c("lng", "lat"),
-                        crs = 4326)
-    var = param()
-      buffer <- pt %>%
-          st_transform(5070) %>%
-          st_buffer(30000)
-      bb = buffer %>%
-          st_bbox() %>%
-          st_as_sfc() %>%
-          st_transform(4326) %>%
-          st_as_sf()
-      # Map 2 fly to bounds
-      bounds <- st_bbox(bb) %>%
-          st_as_sfc() %>%
-          st_buffer(0.15) %>%
-          st_bbox() %>%
-          as.vector()
-
-      rast <- climateR::getGridMET(AOI = bb, var, startDate = "2010-01-01")
-      print("raster1")
-        print(var)
-      r <- rast$[var][[1]]
-    output$catchMap2 <- renderLeaflet({
-        second_map() %>% 
-          clearMarkers() %>%
-          clearShapes() %>%
-          clearImages() %>%
-          addRasterImage(x = r)
-      })
-  }
-})
-      # flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
-#   } else if (input$variable1 == "prcp") {
-#     click <<- input$catchMap_click %>% 
+# # Clicking on map 1 outputs Value boxes on both pages + catchment polygons + Dat table + info panel
+#   observeEvent(input$catchMap_click, {
+#    if(!is.null(input$catchMap_click)) {
+#     click <- input$catchMap_click %>% 
 #       data.frame() %>% 
 #       dplyr::select(lat,lng)
 #     print(click)
 #     pt <- sf::st_as_sf(click, 
 #                         coords = c("lng", "lat"), 
 #                         crs = 4326)
+#     
+#     print("map1_click")
+#     
+#     # bb <- pt %>%
+#     #     st_transform(5070) %>%
+#     #     st_buffer(30000) %>% 
+#     #     st_transform(4326)
+#     # output$comidBox <- renderValueBox({
+#     # valueBox(value = paste("COMID: ", comid)) })
+#     
+#     # fly to bounds
+#     # bounds <- st_bbox(bb) %>% 
+#     #       st_as_sfc() %>%
+#     #       st_buffer(0.2) %>% 
+#     #       st_bbox() %>% 
+#     #       as.vector()
+# 
 #       buffer <- pt %>%
 #           st_transform(5070) %>%
 #           st_buffer(30000)
@@ -320,15 +201,138 @@ observeEvent(input$submitButton, {
 #           st_buffer(0.15) %>% 
 #           st_bbox() %>% 
 #           as.vector()
-#       rast <- climateR::getGridMET(AOI = bb, "prcp", startDate = "2010-01-01")
-#       print("raster2")
-#       prcp <- rast$prcp[[1]]
 #       
+#       # box <- bb2()
+#       # variable <- param()
+#       # clim <- climateR::getGridMET(AOI = box, variable, startDate = "2010-01-01")
+#       # variable <- clim$variable[[1]]
 #       
+#  
+#     leafletProxy("catchMap") %>% 
+#       clearMarkers() %>%
+#       clearShapes() %>% 
+#       addMarkers(data = pt) %>% 
+#        addPolygons(data = bb,
+#                    fillColor = 'red',
+#                    col = "black",
+#                    weight = 2) %>%
+#     flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+#     
 # 
+# # 
+# #     leafletProxy("catchMap2") %>%
+# #       clearShapes() %>%
+# #       clearImages() %>%
+# #       # addRasterImage(x = clim) %>%
+# #        addMarkers(data = pt) %>%
+# #        addPolygons(data = bb,
+# #                    fillColor = 'red',
+# #                    col = "black",
+# #                    weight = 2) %>%
+# #       flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+#    }
+#   })
+# # # catchMap and catchMap2 are linked while zooming
+# #   observe({ # Observer to respond to zoom / pan of map1 and apply to map2
+# #     coords <- input$catchMap_center
+# #     zoom <- input$catchMap_zoom
+# #     print(coords)
+# #     print(zoom)
+# #     if (!is.null(coords)) {
+# #       leafletProxy("catchMap2") %>%
+# #         setView(lat = coords$lat, lng = coords$lng, zoom = zoom)
+# #     }
+# # })
+# #   # catchMap and catchMap2 are linked while zooming
+# #   observe({ # Observer to respond to zoom / pan of map1 and apply to map2
+# #     if(is.null(input$variable1)) {
+# #       NULL
+# #     } else if (!is.null(var)){
+# #     var <- input$variable1
+# #     box <- bb2()
+# #     clim <- climateR::getGridMET(AOI = box, var, startDate = "2010-01-01")
+# #     r <- clim$var[[1]]
+# #     print(var)
+# #     print(box)
+# #     
+# #     leafletProxy("catchMap2") %>%
+# #         clearShapes() %>%
+# #         clearImages() %>%
+# #         addRasterImage(x = r)
+# #     }
+# # })
+# # 
+# # 
+# observeEvent(input$submitButton, {
+#   if(!is.null(input$catchMap_click)) {
+#     click <- input$catchMap_click %>%
+#       data.frame() %>%
+#       dplyr::select(lat,lng)
+#     print(click)
+#     pt <- sf::st_as_sf(click,
+#                         coords = c("lng", "lat"),
+#                         crs = 4326)
+#     var = param()
+#       buffer <- pt %>%
+#           st_transform(5070) %>%
+#           st_buffer(30000)
+#       bb = buffer %>%
+#           st_bbox() %>%
+#           st_as_sfc() %>%
+#           st_transform(4326) %>%
+#           st_as_sf()
+#       # Map 2 fly to bounds
+#       bounds <- st_bbox(bb) %>%
+#           st_as_sfc() %>%
+#           st_buffer(0.15) %>%
+#           st_bbox() %>%
+#           as.vector()
+# 
+#       rast <- climateR::getGridMET(AOI = bb, var, startDate = "2010-01-01")
+#       print("raster1")
+#         print(var)
+#       r <- rast$var[[1]]
+#     output$catchMap2 <- renderLeaflet({
+#         second_map() %>% 
+#           clearMarkers() %>%
+#           clearShapes() %>%
+#           clearImages() %>%
+#           addRasterImage(x = r)
+#       })
 #   }
 # })
-# output$catchMap2 <- renderLeaflet({
+#       # flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+# #   } else if (input$variable1 == "prcp") {
+# #     click <<- input$catchMap_click %>% 
+# #       data.frame() %>% 
+# #       dplyr::select(lat,lng)
+# #     print(click)
+# #     pt <- sf::st_as_sf(click, 
+# #                         coords = c("lng", "lat"), 
+# #                         crs = 4326)
+# #       buffer <- pt %>%
+# #           st_transform(5070) %>%
+# #           st_buffer(30000)
+# #       bb = buffer %>%
+# #           st_bbox() %>%
+# #           st_as_sfc() %>%
+# #           st_transform(4326) %>%
+# #           st_as_sf()
+# #       # Map 2 fly to bounds
+# #       bounds <- st_bbox(bb) %>% 
+# #           st_as_sfc() %>%
+# #           st_buffer(0.15) %>% 
+# #           st_bbox() %>% 
+# #           as.vector()
+# #       rast <- climateR::getGridMET(AOI = bb, "prcp", startDate = "2010-01-01")
+# #       print("raster2")
+# #       prcp <- rast$prcp[[1]]
+# #       
+# #       
+# # 
+# #   }
+# # })
+# # output$catchMap2 <- renderLeaflet({
 #   r <- rasterData()
 #   leafletProxy("catchMap2") %>%
 #       clearMarkers() %>%

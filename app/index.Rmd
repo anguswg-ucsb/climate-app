@@ -1,10 +1,10 @@
 ---
-title: "climateR"
+title: "Climate predictions"
 runtime: shiny
 output: 
   flexdashboard::flex_dashboard:
     navbar:
-      - { icon: "fa-question-circle", href: "https://github.com/mikejohnson51/climateR", align: right }
+      - { icon: "fa-question-circle", href: "https://water.noaa.gov/about/nwm", align: right }
     theme: cerulean
     orientation: rows
     vertical_layout: fill
@@ -13,22 +13,16 @@ output:
 ```{r setup, include = FALSE}
 library(shiny)
 library(flexdashboard)
-
 library(dataRetrieval)
 library(climateR)
 library(USAboundaries)
 library(USAboundariesData)
-
 library(lubridate)
 library(leaflet)
 library(sf)
-library(raster)
-library(AOI)
-
 library(dplyr)
+library(raster)
 library(dygraphs)
-
-
 source('utils.R')
 ```
 
@@ -37,14 +31,16 @@ param_lst <- param_meta$terraclim$call
 #Initialize Maps 
 output$catchMap     <- renderLeaflet({ basemap() })
 output$catchMap2     <- renderLeaflet({ second_map() })
-
 # output$countyMap <- renderLeaflet({ pop_map(pop) })
 # comid <<- reactiveValues(comid = NULL)
+param <- reactive({
+  var <- input$variable1
+})
 point <- reactive({
     point <-  input$catchMap_click
     point <-  input$catchMap2_click
 })
-nwm <- reactiveValues()
+
 ```
 
 
@@ -57,19 +53,16 @@ Inputs {.sidebar}
 
 ### Model Filters
 ```{r}
-dateRangeInput("dateTS", label = "Date Range Input",
-               start = "1993-01-01",
-               end = "2018-12-31",
-               min = "1993-01-01",
-               max = "2018-12-31",
+dateInput("dateTS", label = "Date Input",
+               value = (Sys.Date() -1),
+               min = "1980-01-01",
+               max = (Sys.Date() -1),
                format = "yyyy mm dd",
                weekstart = 1)
-selectInput("graph1_var",
+selectInput("variable1",
             label = "Variable", 
-            choices = c('aet', 'water_deficit', 'palmer', 'pet', 'prcp', 'q', 'soilm', 'srad', 'swe', 'tmax', 'tmin', 'vp', 'vpd', 'wind'))
-selectInput("graph2_var",
-            label = "Variable", 
-            choices = c('aet', 'water_deficit', 'palmer', 'pet', 'prcp', 'q', 'soilm', 'srad', 'swe', 'tmax', 'tmin', 'vp', 'vpd', 'wind'))
+            choices = c('prcp', 'rhmax', 'rhmin', 'shum', 'srad', 'wind_dir', 'tmin', 'tmax', 'wind_vel', 'burn_index', 'fmoist_100', 'fmoist_1000', 'energy_release', 'palmer', 'pet_alfalfa', 'pet_grass', 'vpd'))
+verbatimTextOutput("dateInputText")
 
 ```
 
@@ -80,120 +73,73 @@ shiny::actionButton("submitButton", label = "Enter", icon("search"))
 
 Row
 -----------------------------------------------------------------------
-### 
+
+### Map1
 ```{r}
-valueBoxOutput("comidBox")
-```
-
-Row {data-height=700}
------------------------------------------------------------------------
-
-###
-```{r, fig.width = 350}
 leafletOutput("catchMap")
 ```
 
-###
-```{r, fig.width = 250}
-# fig.width = 550
+### map 2
+```{r}
 leafletOutput("catchMap2")
 ```
+
 
 ```{r context = "server"}
 # Clicking on map 1 outputs Value boxes on both pages + catchment polygons + Dat table + info panel
   observeEvent(input$catchMap_click, {
    if(!is.null(input$catchMap_click)) {
-    click <<- input$catchMap_click %>% 
+    click <- input$catchMap_click %>% 
       data.frame() %>% 
       dplyr::select(lat,lng)
     print(click)
     pt <- sf::st_as_sf(click, 
                         coords = c("lng", "lat"), 
                         crs = 4326)
-    
-    print("map1_click")
-    
-    # catch_df <- get_nhdplus(comid = comid, realization = "catchment")
-    buffer <- pt %>%
-      st_buffer(2)
-    
-    # output$comidBox <- renderValueBox({
-    # valueBox(value = paste("COMID: ", comid)) })
-    
-    bounds <- st_bbox(buffer) %>% 
-      st_as_sfc() %>% 
-      st_buffer(2) %>% 
-      st_bbox() %>% 
-      as.vector()
-    
+  
+
+      buffer <- pt %>%
+          st_transform(5070) %>%
+          st_buffer(30000)
+      bb = buffer %>%
+          st_bbox() %>%
+          st_as_sfc() %>%
+          st_transform(4326) %>%
+          st_as_sf()
+      # Map 2 fly to bounds
+      bounds <- st_bbox(bb) %>% 
+          st_as_sfc() %>%
+          st_buffer(0.15) %>% 
+          st_bbox() %>% 
+          as.vector()
+      # temp <- climateR::getGridMET(AOI = bb, "tmax", startDate = "2010-01-01")
+      # tmax <- temp$tmax[[1]]
+
     leafletProxy("catchMap") %>% 
       clearMarkers() %>%
       clearShapes() %>% 
       addMarkers(data = pt) %>% 
-       addPolygons(data = buffer,
+       addPolygons(data = bb,
                    fillColor = 'red',
                    col = "black",
                    weight = 2) %>%
-      flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
-
+    flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
     
     leafletProxy("catchMap2") %>%
       clearMarkers() %>%
       clearShapes() %>%
-      addMarkers(data = pt) %>% 
-      addPolygons(data = buffer,
+      # clearImages() %>% 
+      # addRasterImage(x = tmax) %>% 
+       addMarkers(data = pt) %>% 
+       addPolygons(data = bb,
                    fillColor = 'red',
                    col = "black",
                    weight = 2) %>%
       flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
    } 
-})
-# click on map 2 will render polygon, point on map 1 and 3
-observeEvent(input$catchMap2_click, {
-   if(!is.null(input$catchMap2_click)) {
-    click <<- input$catchMap2_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-    print(click)
-    pt <- sf::st_as_sf(click, 
-                        coords = c("lng", "lat"), 
-                        crs = 4326)
-    buffer <- pt %>%
-        st_transform(5070) %>%
-        st_buffer(30000) %>% 
-        st_transform(4326)
-    
-    # output$comidBox <- renderValueBox({
-    # valueBox(value = paste("COMID: ", comid)) })
-    
-    bounds <- st_bbox(buffer) %>% 
-      st_as_sfc() %>% 
-      st_buffer(2) %>% 
-      st_bbox() %>% 
-      as.vector()
-    
-    leafletProxy("catchMap") %>% 
-      clearMarkers() %>%
-      clearShapes() %>% 
-      addMarkers(data = pt) %>% 
-       addPolygons(data = buffer,
-                   fillColor = 'red',
-                   col = "black",
-                   weight = 2) %>%
-      flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
 
-    
-    leafletProxy("catchMap2") %>%
-      clearMarkers() %>%
-      clearShapes() %>%
-      addMarkers(data = pt) %>% 
-      addPolygons(data = buffer,
-                   fillColor = 'red',
-                   col = "black",
-                   weight = 2) %>%
-      flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
-   } 
 })
+
 # catchMap and catchMap2 are linked while zooming
   observe({ # Observer to respond to zoom / pan of map1 and apply to map2
     coords <- input$catchMap_center
@@ -205,40 +151,59 @@ observeEvent(input$catchMap2_click, {
         setView(lat = coords$lat, lng = coords$lng, zoom = zoom)
     }
 })
-# 
-# rasterData <- eventReactive(input$submitButton, {
-#   if(!is.null(input$catchMap_click) & input$graph1_var == "tmax") {
-#     click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
-#       dplyr::select(lat,lng)
-#     
-#     print("raster click")
-#     pt <- sf::st_as_sf(click, 
-#                         coords = c("lng", "lat"), 
-#                         crs = 4326)
-#       buffer <- pt %>%
-#         st_transform(5070) %>%
-#         st_buffer(30000) 
-#       
-#       bb = buffer %>%
-#         st_bbox() %>%
-#         st_as_sfc() %>%
-#         st_transform(4326) %>%
-#         st_as_sf()
-#       
-#       temp <- climateR::getGridMET(AOI = bb, "tmax", startDate = "2010-01-01")
-#       tmax <- temp$tmax[[1]]
-# 
-#       leafletProxy("catchMap") %>%
-#           clearMarkers() %>%
-#           clearShapes() %>%
-#           addRasterImage(x = tmax)
-#   }
+observeEvent(input$submitButton, {
+  if(!is.null(input$variable1)) {
+      click <- input$catchMap_click %>%
+        data.frame() %>%
+        dplyr::select(lat,lng)
+
+      print("raster click")
+      pt <- sf::st_as_sf(click,
+                          coords = c("lng", "lat"),
+                          crs = 4326)
+      buffer <- pt %>%
+          st_transform(5070) %>%
+          st_buffer(30000)
+
+      bb = buffer %>%
+          st_bbox() %>%
+          st_as_sfc() %>%
+          st_transform(4326) %>%
+          st_as_sf()
+
+      # Map 2 fly to bounds
+      bounds <- st_bbox(bb) %>%
+          st_as_sfc() %>%
+          st_buffer(0.15) %>%
+          st_bbox() %>%
+          as.vector()
+      var <- param()
+      rast <- climateR::getGridMET(AOI = bb, var, startDate = dateText())
+      print("raster1")
+      print(var)
+      
+        r <- rast[[var]][[1]]
+      leafletProxy("catchMap2") %>% 
+          clearMarkers() %>%
+          clearShapes() %>%
+          clearImages() %>%
+          addRasterImage(x = r) %>% 
+        flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+   
+  }
+})
+
+dateText <- eventReactive(input$submitButton, {
+    format.Date(input$dateTS)
+  })
+output$dateInputText <- renderText({
+   dateText()
+  })
+# output$catchMap2 <- renderLeaflet({
+#  rasterData()
 # })
-# 
-# output$catchMap <- renderLeaflet({
-#   rasterData()
-# })
+# click on map 2 will render polygon, point on map 1 and 3
+
 ```
 
 Row
@@ -249,363 +214,101 @@ dygraphOutput ('graph1')
 ```
 
 ```{r, fig.keep='none'}
-
 graphData1 <- eventReactive(input$submitButton, {
-  if(input$graph1_var == "aet") {
-        click <<- input$catchMap_click %>% 
-            data.frame() %>% 
+    if(!is.null(input$variable1)) {
+        click <- input$catchMap_click %>%
+            data.frame() %>%
             dplyr::select(lat,lng)
         print(click)
-        pt <- sf::st_as_sf(click, 
-                            coords = c("lng", "lat"), 
+        pt <- sf::st_as_sf(click,
+                            coords = c("lng", "lat"),
                             crs = 4326)
-        
+        var <- param()
         print("evap")
-        evap <- climateR::getTerraClim(AOI = pt, param = "aet",
+        clim <- climateR::getTerraClim(AOI = pt, param = var,
                                     startDate = "1993-01-01",
                                     endDate = "2015-01-01")
-        evap$date <- paste0(evap$date, "-01")
-        evap$date <- as.Date(evap$date)
-        evap <- evap %>% rename(AET = aet)
-        rownames(evap) <- evap$date
-        
-        dygraph(data = select(evap,AET),
-                ylab = "Water volume (mm)") %>% 
+        clim$date <- paste0(clim$date, "-01")
+        clim$date <- as.Date(clim$date)
+        rownames(clim) <- clim$date
+
+        dygraph(data = dplyr::select(clim, var)) %>%
           dyHighlight(highlightCircleSize = 4,
                     highlightSeriesBackgroundAlpha = .4) %>%
               dyOptions(colors = c("darkred"),
                   fillGraph = TRUE)
-          
-  } else if (input$graph1_var == "water_deficit") {
-    click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-        print(click)
-      pt <- sf::st_as_sf(click, 
-                          coords = c("lng", "lat"), 
-                          crs = 4326)
-      
-      print("soil")
-      deficit <- climateR::getTerraClim(AOI = pt, param = "water_deficit",
-                               startDate = "1993-01-01",
-                               endDate = "2015-01-01")
-
-      deficit$date <- paste0(deficit$date, "-01")
-      deficit$date <- as.Date(deficit$date)
-      rownames(deficit) <- deficit$date
-      deficit <- select(deficit, water_deficit)
-      
-      dygraph(data = deficit) %>%
-        dyHighlight(highlightCircleSize = 4,
-                    highlightSeriesBackgroundAlpha = .4) %>%
-        dyOptions(colors = c("navy"),
-                  fillGraph = TRUE)
-  } else if (input$graph1_var == "palmer") {
-    click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-        print(click)
-      pt <- sf::st_as_sf(click, 
-                          coords = c("lng", "lat"), 
-                          crs = 4326)
-      
-      print("soil")
-      drought <- climateR::getTerraClim(AOI = pt, param = "palmer",
-                               startDate = "1993-01-01",
-                               endDate = "2015-01-01")
-
-      drought$date <- paste0(drought$date, "-01")
-      drought$date <- as.Date(drought$date)
-      rownames(drought) <- drought$date
-      drought <- select(drought, palmer)
-      
-      dygraph(data = drought) %>%
-        dyHighlight(highlightCircleSize = 4,
-                    highlightSeriesBackgroundAlpha = .4) %>%
-        dyOptions(colors = c("navy"),
-                  fillGraph = TRUE)
-  } else if (input$graph1_var == "pet") {
-    click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-        print(click)
-      pt <- sf::st_as_sf(click, 
-                          coords = c("lng", "lat"), 
-                          crs = 4326)
-      
-      print("ref_evap")
-    ref_evap <- climateR::getTerraClim(AOI = pt, param = "pet",
-                               startDate = "1993-01-01",
-                               endDate = "2015-01-01")
-
-      ref_evap$date <- paste0(ref_evap$date, "-01")
-      ref_evap$date <- as.Date(ref_evap$date)
-      rownames(ref_evap) <- ref_evap$date
-      ref_evap <- select(ref_evap, pet)
-      
-      dygraph(data = ref_evap) %>%
-        dyHighlight(highlightCircleSize = 4,
-                    highlightSeriesBackgroundAlpha = .4) %>%
-        dyOptions(colors = c("navy"),
-                  fillGraph = TRUE)
-  } else if (input$graph1_var == "prcp") {
-    click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-    print(click)
-    pt <- sf::st_as_sf(click, 
-                        coords = c("lng", "lat"), 
-                        crs = 4326)
-    
-    print("precip")
-    
-    precip <- climateR::getTerraClim(AOI = pt, param = "prcp",
-                                startDate = "1993-01-01",
-                                endDate = "2015-01-01")
-    precip$date <- paste0(precip$date, "-01")
-    precip$date <- as.Date(precip$date)
-    rownames(precip) <- precip$date
-    precip <- select(precip, PPT = prcp)
-    dygraph(data = precip,
-            ylab = "Water volume (mm)") %>% 
-      dyHighlight(highlightCircleSize = 4,
-                highlightSeriesBackgroundAlpha = .4) %>%
-          dyOptions(colors = c("navy"),
-              fillGraph = TRUE)
-    
-  } else if (input$graph1_var == "q ") {
-    click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-        print(click)
-      pt <- sf::st_as_sf(click, 
-                          coords = c("lng", "lat"), 
-                          crs = 4326)
-      
-      print("q")
-    runoff <- climateR::getTerraClim(AOI = pt, param = "q",
-                               startDate = "1993-01-01",
-                               endDate = "2015-01-01")
-
-      runoff$date <- paste0(runoff$date, "-01")
-      runoff$date <- as.Date(runoff$date)
-      rownames(runoff) <- runoff$date
-      runoff <- select(runoff, q)
-      
-      dygraph(data = runoff) %>%
-        dyHighlight(highlightCircleSize = 4,
-                    highlightSeriesBackgroundAlpha = .4) %>%
-        dyOptions(colors = c("navy"),
-                  fillGraph = TRUE)
-  } else if (input$graph1_var == "soilm") {
-    click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-        print(click)
-      pt <- sf::st_as_sf(click, 
-                          coords = c("lng", "lat"), 
-                          crs = 4326)
-      
-      print("soil")
-    soil <- climateR::getTerraClim(AOI = pt, param = "soilm",
-                               startDate = "1993-01-01",
-                               endDate = "2015-01-01")
-
-      soil$date <- paste0(soil$date, "-01")
-      soil$date <- as.Date(soil$date)
-      rownames(soil) <- soil$date
-      soil <- select(soil, soilm)
-      
-      dygraph(data = soil) %>%
-        dyHighlight(highlightCircleSize = 4,
-                    highlightSeriesBackgroundAlpha = .4) %>%
-        dyOptions(colors = c("navy"),
-                  fillGraph = TRUE)
-      
-  } else if (input$graph1_var == "srad") {
-    click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-        print(click)
-      pt <- sf::st_as_sf(click, 
-                          coords = c("lng", "lat"), 
-                          crs = 4326)
-      
-      print("srad")
-    solar <- climateR::getTerraClim(AOI = pt, param = "srad",
-                               startDate = "1993-01-01",
-                               endDate = "2015-01-01")
-
-      solar$date <- paste0(solar$date, "-01")
-      solar$date <- as.Date(solar$date)
-      rownames(solar) <- solar$date
-      solar <- select(solar, srad)
-      
-      dygraph(data = solar) %>%
-        dyHighlight(highlightCircleSize = 4,
-                    highlightSeriesBackgroundAlpha = .4) %>%
-        dyOptions(colors = c("navy"),
-                  fillGraph = TRUE)
-    
-  } else if (input$graph1_var == "swe") {
-    click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-        print(click)
-      pt <- sf::st_as_sf(click, 
-                          coords = c("lng", "lat"), 
-                          crs = 4326)
-      
-      print("snow")
-    snow <- climateR::getTerraClim(AOI = pt, param = "swe",
-                               startDate = "1993-01-01",
-                               endDate = "2015-01-01")
-
-      snow$date <- paste0(snow$date, "-01")
-      snow$date <- as.Date(snow$date)
-      rownames(snow) <- snow$date
-      snow <- select(snow, swe)
-      
-      dygraph(data = snow) %>%
-        dyHighlight(highlightCircleSize = 4,
-                    highlightSeriesBackgroundAlpha = .4) %>%
-        dyOptions(colors = c("navy"),
-                  fillGraph = TRUE)
-    
-  } else if (input$graph1_var == "tmax") {
-     click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-        print(click)
-      pt <- sf::st_as_sf(click, 
-                          coords = c("lng", "lat"), 
-                          crs = 4326)
-      
-      print("temp_max")
-    temp_max <- climateR::getTerraClim(AOI = pt, param = "tmax",
-                               startDate = "1993-01-01",
-                               endDate = "2015-01-01")
-
-      temp_max$date <- paste0(temp_max$date, "-01")
-      temp_max$date <- as.Date(temp_max$date)
-      rownames(temp_max) <- temp_max$date
-      temp_max <- select(temp_max, tmax)
-      
-      dygraph(data = temp_max) %>%
-        dyHighlight(highlightCircleSize = 4,
-                    highlightSeriesBackgroundAlpha = .4) %>%
-        dyOptions(colors = c("navy"),
-                  fillGraph = TRUE)
-  } else if (input$graph1_var == "tmin") {
-    click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-        print(click)
-      pt <- sf::st_as_sf(click, 
-                          coords = c("lng", "lat"), 
-                          crs = 4326)
-      
-      print("temp_min")
-    temp_min <- climateR::getTerraClim(AOI = pt, param = "tmin",
-                               startDate = "1993-01-01",
-                               endDate = "2015-01-01")
-
-      temp_min$date <- paste0(temp_min$date, "-01")
-      temp_min$date <- as.Date(temp_min$date)
-      rownames(temp_min) <- temp_min$date
-      temp_min <- select(temp_min, swe)
-      
-      dygraph(data = temp_min) %>%
-        dyHighlight(highlightCircleSize = 4,
-                    highlightSeriesBackgroundAlpha = .4) %>%
-        dyOptions(colors = c("navy"),
-                  fillGraph = TRUE)
-  } else if (input$graph1_var == "vp") {
-    click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-        print(click)
-      pt <- sf::st_as_sf(click, 
-                          coords = c("lng", "lat"), 
-                          crs = 4326)
-      
-      print("vp")
-    vap_pressure <- climateR::getTerraClim(AOI = pt, param = "vp",
-                               startDate = "1993-01-01",
-                               endDate = "2015-01-01")
-
-      vap_pressure$date <- paste0(vap_pressure$date, "-01")
-      vap_pressure$date <- as.Date(vap_pressure$date)
-      rownames(vap_pressure) <- vap_pressure$date
-      vap_pressure <- select(vap_pressure, vp)
-      
-      dygraph(data = vap_pressure) %>%
-        dyHighlight(highlightCircleSize = 4,
-                    highlightSeriesBackgroundAlpha = .4) %>%
-        dyOptions(colors = c("navy"),
-                  fillGraph = TRUE)
-  } else if (input$graph1_var == "vpd") {
-     click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-        print(click)
-      pt <- sf::st_as_sf(click, 
-                          coords = c("lng", "lat"), 
-                          crs = 4326)
-      
-      print("vpd")
-    mean_vap_pressure <- climateR::getTerraClim(AOI = pt, param = "vpd",
-                               startDate = "1993-01-01",
-                               endDate = "2015-01-01")
-
-      mean_vap_pressure$date <- paste0(mean_vap_pressure$date, "-01")
-      mean_vap_pressure$date <- as.Date(mean_vap_pressure$date)
-      rownames(mean_vap_pressure) <- mean_vap_pressure$date
-      mean_vap_pressure <- select(mean_vap_pressure, vpd)
-      
-      dygraph(data = mean_vap_pressure) %>%
-        dyHighlight(highlightCircleSize = 4,
-                    highlightSeriesBackgroundAlpha = .4) %>%
-        dyOptions(colors = c("navy"),
-                  fillGraph = TRUE)
-  } else if (input$graph1_var == "wind") {
-    click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-        print(click)
-      pt <- sf::st_as_sf(click, 
-                          coords = c("lng", "lat"), 
-                          crs = 4326)
-      
-      print("vpd")
-    wi <- climateR::getTerraClim(AOI = pt, param = "wind",
-                               startDate = "1993-01-01",
-                               endDate = "2015-01-01")
-
-      wi$date <- paste0(wi$date, "-01")
-      wi$date <- as.Date(wi$date)
-      rownames(wi) <- wi$date
-      wi <- select(wi, wind)
-      
-      dygraph(data = wi) %>%
-        dyHighlight(highlightCircleSize = 4,
-                    highlightSeriesBackgroundAlpha = .4) %>%
-        dyOptions(colors = c("navy"),
-                  fillGraph = TRUE)
-  }
-
+    }
 })
-
-output$graph1 <- renderDygraph({
-   graphData1()
-  })
-
-```    
-  
-```{r context = "server"}
-# precip & evapotran data/plot, reactive to input of date button
-# precipData <- eventReactive(input$catchMap_click, {
-#   if(!is.null(input$catchMap_click)) {
+#   } else if (input$variable1 == "water_deficit") {
+#     click <<- input$catchMap_click %>%
+#       data.frame() %>%
+#       dplyr::select(lat,lng)
+#         print(click)
+#       pt <- sf::st_as_sf(click,
+#                           coords = c("lng", "lat"),
+#                           crs = 4326)
+# 
+#       print("soil")
+#       deficit <- climateR::getTerraClim(AOI = pt, param = "water_deficit",
+#                                startDate = "1993-01-01",
+#                                endDate = "2015-01-01")
+#       deficit$date <- paste0(deficit$date, "-01")
+#       deficit$date <- as.Date(deficit$date)
+#       rownames(deficit) <- deficit$date
+#       deficit <- select(deficit, water_deficit)
+# 
+#       dygraph(data = deficit) %>%
+#         dyHighlight(highlightCircleSize = 4,
+#                     highlightSeriesBackgroundAlpha = .4) %>%
+#         dyOptions(colors = c("navy"),
+#                   fillGraph = TRUE)
+#   } else if (input$variable1 == "palmer") {
+#     click <<- input$catchMap_click %>%
+#       data.frame() %>%
+#       dplyr::select(lat,lng)
+#         print(click)
+#       pt <- sf::st_as_sf(click,
+#                           coords = c("lng", "lat"),
+#                           crs = 4326)
+# 
+#       print("soil")
+#       drought <- climateR::getTerraClim(AOI = pt, param = "palmer",
+#                                startDate = "1993-01-01",
+#                                endDate = "2015-01-01")
+#       drought$date <- paste0(drought$date, "-01")
+#       drought$date <- as.Date(drought$date)
+#       rownames(drought) <- drought$date
+#       drought <- select(drought, palmer)
+# 
+#       dygraph(data = drought) %>%
+#         dyHighlight(highlightCircleSize = 4,
+#                     highlightSeriesBackgroundAlpha = .4) %>%
+#         dyOptions(colors = c("navy"),
+#                   fillGraph = TRUE)
+#   } else if (input$variable1 == "pet") {
+#     click <<- input$catchMap_click %>%
+#       data.frame() %>%
+#       dplyr::select(lat,lng)
+#         print(click)
+#       pt <- sf::st_as_sf(click,
+#                           coords = c("lng", "lat"),
+#                           crs = 4326)
+# 
+#       print("ref_evap")
+#     ref_evap <- climateR::getTerraClim(AOI = pt, param = "pet",
+#                                startDate = "1993-01-01",
+#                                endDate = "2015-01-01")
+#       ref_evap$date <- paste0(ref_evap$date, "-01")
+#       ref_evap$date <- as.Date(ref_evap$date)
+#       rownames(ref_evap) <- ref_evap$date
+#       ref_evap <- select(ref_evap, pet)
+# 
+#       dygraph(data = ref_evap) %>%
+#         dyHighlight(highlightCircleSize = 4,
+#                     highlightSeriesBackgroundAlpha = .4) %>%
+#         dyOptions(colors = c("navy"),
+#                   fillGraph = TRUE)
+#   } else if (input$variable1 == "prcp") {
 #     click <<- input$catchMap_click %>%
 #       data.frame() %>%
 #       dplyr::select(lat,lng)
@@ -614,7 +317,7 @@ output$graph1 <- renderDygraph({
 #                         coords = c("lng", "lat"),
 #                         crs = 4326)
 # 
-#     print("map1 precip")
+#     print("precip")
 # 
 #     precip <- climateR::getTerraClim(AOI = pt, param = "prcp",
 #                                 startDate = "1993-01-01",
@@ -629,411 +332,220 @@ output$graph1 <- renderDygraph({
 #                 highlightSeriesBackgroundAlpha = .4) %>%
 #           dyOptions(colors = c("navy"),
 #               fillGraph = TRUE)
-#       # dyRangeSelector(dateWindow = c(as.character(r$dateTS[1] + 1),
-#       #                                    as.character(r$dateTS[2] + 1)))
-#   } else if (!is.null(input$catchMap2_click)) {
-#        click <<- input$catchMap2_click %>%
-#         data.frame() %>%
-#         dplyr::select(lat,lng)
+# 
+#   } else if (input$variable1 == "q ") {
+#     click <<- input$catchMap_click %>%
+#       data.frame() %>%
+#       dplyr::select(lat,lng)
 #         print(click)
-#         pt <- sf::st_as_sf(click,
+#       pt <- sf::st_as_sf(click,
 #                           coords = c("lng", "lat"),
 #                           crs = 4326)
 # 
-#         print("map1 precip")
-# 
-#         precip <- climateR::getTerraClim(AOI = pt, param = "prcp",
-#                                     startDate = "1993-01-01",
-#                                     endDate = "2015-01-01")
-#         precip$date <- paste0(precip$date, "-01")
-#         precip$date <- as.Date(precip$date)
-#         rownames(precip) <- precip$date
-#         precip <- select(precip, PPT = prcp)
-# 
-#         dygraph(data = precip,
-#                 ylab = "Water volume (mm)") %>%
-#           dyHighlight(highlightCircleSize = 4,
-#                     highlightSeriesBackgroundAlpha = .4) %>%
-#               dyOptions(colors = c("navy"),
-#                   fillGraph = TRUE)
-#           # dyRangeSelector(dateWindow = c(as.character(r$dateTS[1] + 1),
-#           #                                    as.character(r$dateTS[2] + 1)))
-#   }
-#   })
-# 
-#     # highchart() %>%
-#     #   hc_yAxis_multiples(list(title = list(text = "Accumulated Precipitation (mm)"),min=0, max = max(terra$prcp),
-#     #             showFirstLabel = TRUE, showLastLabel = TRUE, opposite = FALSE),
-#     #             list(title = list(text = "Actual Evapotranspiration (mm)"), showLastLabel=FALSE,opposite = TRUE)) %>%
-#     #   hc_add_series(terra, type = "column", hcaes(x = date, y = prcp), yAxis = 1 ) %>%
-#     #   hc_add_series(terra, type = "line", hcaes(x = date, y = aet), yAxis = 0) %>%
-#     #   hc_colors(c("darkcyan", "darkred")) %>%
-#     #   hc_size(height = 450)
-# 
-# 
-# # Render precip/evapo plot after action button is clicked
-# output$precipGraph <- renderDygraph({
-#         precipData()
-#       })
-```
-### graph2
-```{r}
-# dygraphOutput ('graph2')
-```
-
-```{r, fig.keep='none'}
-
-# graphData2 <- eventReactive(input$submitButton, {
-#   if(input$graph2_var == "aet") {
-#         click <<- input$catchMap_click %>% 
-#             data.frame() %>% 
-#             dplyr::select(lat,lng)
-#         print(click)
-#         pt <- sf::st_as_sf(click, 
-#                             coords = c("lng", "lat"), 
-#                             crs = 4326)
-#         
-#         print("evap")
-#         evap <- climateR::getTerraClim(AOI = pt, param = "aet",
-#                                     startDate = "1993-01-01",
-#                                     endDate = "2015-01-01")
-#         evap$date <- paste0(evap$date, "-01")
-#         evap$date <- as.Date(evap$date)
-#         evap <- evap %>% rename(AET = aet)
-#         rownames(evap) <- evap$date
-#         
-#         dygraph(data = select(evap,AET),
-#                 ylab = "Water volume (mm)") %>% 
-#           dyHighlight(highlightCircleSize = 4,
-#                     highlightSeriesBackgroundAlpha = .4) %>%
-#               dyOptions(colors = c("darkred"),
-#                   fillGraph = TRUE)
-#           
-#   } else if (input$graph2_var == "water_deficit") {
-#     click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
-#       dplyr::select(lat,lng)
-#         print(click)
-#       pt <- sf::st_as_sf(click, 
-#                           coords = c("lng", "lat"), 
-#                           crs = 4326)
-#       
 #       print("soil")
-#       deficit <- climateR::getTerraClim(AOI = pt, param = "water_deficit",
-#                                startDate = "1993-01-01",
-#                                endDate = "2015-01-01")
-# 
-#       deficit$date <- paste0(deficit$date, "-01")
-#       deficit$date <- as.Date(deficit$date)
-#       rownames(deficit) <- deficit$date
-#       deficit <- select(deficit, water_deficit)
-#       
-#       dygraph(data = deficit) %>%
-#         dyHighlight(highlightCircleSize = 4,
-#                     highlightSeriesBackgroundAlpha = .4) %>%
-#         dyOptions(colors = c("navy"),
-#                   fillGraph = TRUE)
-#   } else if (input$graph2_var == "palmer") {
-#     click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
-#       dplyr::select(lat,lng)
-#         print(click)
-#       pt <- sf::st_as_sf(click, 
-#                           coords = c("lng", "lat"), 
-#                           crs = 4326)
-#       
-#       print("soil")
-#       drought <- climateR::getTerraClim(AOI = pt, param = "palmer",
-#                                startDate = "1993-01-01",
-#                                endDate = "2015-01-01")
-# 
-#       drought$date <- paste0(drought$date, "-01")
-#       drought$date <- as.Date(drought$date)
-#       rownames(drought) <- drought$date
-#       drought <- select(drought, palmer)
-#       
-#       dygraph(data = drought) %>%
-#         dyHighlight(highlightCircleSize = 4,
-#                     highlightSeriesBackgroundAlpha = .4) %>%
-#         dyOptions(colors = c("navy"),
-#                   fillGraph = TRUE)
-#   } else if (input$graph2_var == "pet") {
-#     click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
-#       dplyr::select(lat,lng)
-#         print(click)
-#       pt <- sf::st_as_sf(click, 
-#                           coords = c("lng", "lat"), 
-#                           crs = 4326)
-#       
-#       print("ref_evap")
-#     ref_evap <- climateR::getTerraClim(AOI = pt, param = "pet",
-#                                startDate = "1993-01-01",
-#                                endDate = "2015-01-01")
-# 
-#       ref_evap$date <- paste0(ref_evap$date, "-01")
-#       ref_evap$date <- as.Date(ref_evap$date)
-#       rownames(ref_evap) <- ref_evap$date
-#       ref_evap <- select(ref_evap, pet)
-#       
-#       dygraph(data = ref_evap) %>%
-#         dyHighlight(highlightCircleSize = 4,
-#                     highlightSeriesBackgroundAlpha = .4) %>%
-#         dyOptions(colors = c("navy"),
-#                   fillGraph = TRUE)
-#   } else if (input$graph2_var == "prcp") {
-#     click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
-#       dplyr::select(lat,lng)
-#     print(click)
-#     pt <- sf::st_as_sf(click, 
-#                         coords = c("lng", "lat"), 
-#                         crs = 4326)
-#     
-#     print("precip")
-#     
-#     precip <- climateR::getTerraClim(AOI = pt, param = "prcp",
-#                                 startDate = "1993-01-01",
-#                                 endDate = "2015-01-01")
-#     precip$date <- paste0(precip$date, "-01")
-#     precip$date <- as.Date(precip$date)
-#     rownames(precip) <- precip$date
-#     precip <- select(precip, PPT = prcp)
-#     dygraph(data = precip,
-#             ylab = "Water volume (mm)") %>% 
-#       dyHighlight(highlightCircleSize = 4,
-#                 highlightSeriesBackgroundAlpha = .4) %>%
-#           dyOptions(colors = c("navy"),
-#               fillGraph = TRUE)
-#     
-#   } else if (input$graph2_var == "q ") {
-#     click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
-#       dplyr::select(lat,lng)
-#         print(click)
-#       pt <- sf::st_as_sf(click, 
-#                           coords = c("lng", "lat"), 
-#                           crs = 4326)
-#     
-#       print("q")
 #     runoff <- climateR::getTerraClim(AOI = pt, param = "q",
 #                                startDate = "1993-01-01",
 #                                endDate = "2015-01-01")
-# 
 #       runoff$date <- paste0(runoff$date, "-01")
 #       runoff$date <- as.Date(runoff$date)
 #       rownames(runoff) <- runoff$date
 #       runoff <- select(runoff, q)
-#       
+# 
 #       dygraph(data = runoff) %>%
 #         dyHighlight(highlightCircleSize = 4,
 #                     highlightSeriesBackgroundAlpha = .4) %>%
 #         dyOptions(colors = c("navy"),
 #                   fillGraph = TRUE)
-#   } else if (input$graph2_var == "soilm") {
-#     click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
+#   } else if (input$variable1 == "soilm") {
+#     click <<- input$catchMap_click %>%
+#       data.frame() %>%
 #       dplyr::select(lat,lng)
 #         print(click)
-#       pt <- sf::st_as_sf(click, 
-#                           coords = c("lng", "lat"), 
+#       pt <- sf::st_as_sf(click,
+#                           coords = c("lng", "lat"),
 #                           crs = 4326)
-#       
+# 
 #       print("soil")
 #     soil <- climateR::getTerraClim(AOI = pt, param = "soilm",
 #                                startDate = "1993-01-01",
 #                                endDate = "2015-01-01")
-# 
 #       soil$date <- paste0(soil$date, "-01")
 #       soil$date <- as.Date(soil$date)
 #       rownames(soil) <- soil$date
 #       soil <- select(soil, soilm)
-#       
+# 
 #       dygraph(data = soil) %>%
 #         dyHighlight(highlightCircleSize = 4,
 #                     highlightSeriesBackgroundAlpha = .4) %>%
 #         dyOptions(colors = c("navy"),
 #                   fillGraph = TRUE)
-#       
-#   } else if (input$graph2_var == "srad") {
-#     click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
+# 
+#   } else if (input$variable1 == "srad") {
+#     click <<- input$catchMap_click %>%
+#       data.frame() %>%
 #       dplyr::select(lat,lng)
 #         print(click)
-#       pt <- sf::st_as_sf(click, 
-#                           coords = c("lng", "lat"), 
+#       pt <- sf::st_as_sf(click,
+#                           coords = c("lng", "lat"),
 #                           crs = 4326)
-#       
+# 
 #       print("srad")
 #     solar <- climateR::getTerraClim(AOI = pt, param = "srad",
 #                                startDate = "1993-01-01",
 #                                endDate = "2015-01-01")
-# 
 #       solar$date <- paste0(solar$date, "-01")
 #       solar$date <- as.Date(solar$date)
 #       rownames(solar) <- solar$date
 #       solar <- select(solar, srad)
-#       
+# 
 #       dygraph(data = solar) %>%
 #         dyHighlight(highlightCircleSize = 4,
 #                     highlightSeriesBackgroundAlpha = .4) %>%
 #         dyOptions(colors = c("navy"),
 #                   fillGraph = TRUE)
-#     
-#   } else if (input$graph2_var == "swe") {
-#     click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
+# 
+#   } else if (input$variable1 == "swe") {
+#     click <<- input$catchMap_click %>%
+#       data.frame() %>%
 #       dplyr::select(lat,lng)
 #         print(click)
-#       pt <- sf::st_as_sf(click, 
-#                           coords = c("lng", "lat"), 
+#       pt <- sf::st_as_sf(click,
+#                           coords = c("lng", "lat"),
 #                           crs = 4326)
-#       
+# 
 #       print("snow")
 #     snow <- climateR::getTerraClim(AOI = pt, param = "swe",
 #                                startDate = "1993-01-01",
 #                                endDate = "2015-01-01")
-# 
 #       snow$date <- paste0(snow$date, "-01")
 #       snow$date <- as.Date(snow$date)
 #       rownames(snow) <- snow$date
 #       snow <- select(snow, swe)
-#       
+# 
 #       dygraph(data = snow) %>%
 #         dyHighlight(highlightCircleSize = 4,
 #                     highlightSeriesBackgroundAlpha = .4) %>%
 #         dyOptions(colors = c("navy"),
 #                   fillGraph = TRUE)
-#     
-#   } else if (input$graph2_var == "tmax") {
-#      click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
+# 
+#   } else if (input$variable1 == "tmax") {
+#      click <<- input$catchMap_click %>%
+#       data.frame() %>%
 #       dplyr::select(lat,lng)
 #         print(click)
-#       pt <- sf::st_as_sf(click, 
-#                           coords = c("lng", "lat"), 
+#       pt <- sf::st_as_sf(click,
+#                           coords = c("lng", "lat"),
 #                           crs = 4326)
-#       
+# 
 #       print("temp_max")
 #     temp_max <- climateR::getTerraClim(AOI = pt, param = "tmax",
 #                                startDate = "1993-01-01",
 #                                endDate = "2015-01-01")
-# 
 #       temp_max$date <- paste0(temp_max$date, "-01")
 #       temp_max$date <- as.Date(temp_max$date)
 #       rownames(temp_max) <- temp_max$date
 #       temp_max <- select(temp_max, tmax)
-#       
+# 
 #       dygraph(data = temp_max) %>%
 #         dyHighlight(highlightCircleSize = 4,
 #                     highlightSeriesBackgroundAlpha = .4) %>%
 #         dyOptions(colors = c("navy"),
 #                   fillGraph = TRUE)
-#   } else if (input$graph2_var == "tmin") {
-#     click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
+#   } else if (input$variable1 == "tmin") {
+#     click <<- input$catchMap_click %>%
+#       data.frame() %>%
 #       dplyr::select(lat,lng)
 #         print(click)
-#       pt <- sf::st_as_sf(click, 
-#                           coords = c("lng", "lat"), 
+#       pt <- sf::st_as_sf(click,
+#                           coords = c("lng", "lat"),
 #                           crs = 4326)
-#       
+# 
 #       print("temp_min")
 #     temp_min <- climateR::getTerraClim(AOI = pt, param = "tmin",
 #                                startDate = "1993-01-01",
 #                                endDate = "2015-01-01")
-# 
 #       temp_min$date <- paste0(temp_min$date, "-01")
 #       temp_min$date <- as.Date(temp_min$date)
 #       rownames(temp_min) <- temp_min$date
 #       temp_min <- select(temp_min, swe)
-#       
+# 
 #       dygraph(data = temp_min) %>%
 #         dyHighlight(highlightCircleSize = 4,
 #                     highlightSeriesBackgroundAlpha = .4) %>%
 #         dyOptions(colors = c("navy"),
 #                   fillGraph = TRUE)
-#   } else if (input$graph2_var == "vp") {
-#     click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
+#   } else if (input$variable1 == "vp") {
+#     click <<- input$catchMap_click %>%
+#       data.frame() %>%
 #       dplyr::select(lat,lng)
 #         print(click)
-#       pt <- sf::st_as_sf(click, 
-#                           coords = c("lng", "lat"), 
+#       pt <- sf::st_as_sf(click,
+#                           coords = c("lng", "lat"),
 #                           crs = 4326)
-#       
+# 
 #       print("vp")
 #     vap_pressure <- climateR::getTerraClim(AOI = pt, param = "vp",
 #                                startDate = "1993-01-01",
 #                                endDate = "2015-01-01")
-# 
 #       vap_pressure$date <- paste0(vap_pressure$date, "-01")
 #       vap_pressure$date <- as.Date(vap_pressure$date)
 #       rownames(vap_pressure) <- vap_pressure$date
 #       vap_pressure <- select(vap_pressure, vp)
-#       
+# 
 #       dygraph(data = vap_pressure) %>%
 #         dyHighlight(highlightCircleSize = 4,
 #                     highlightSeriesBackgroundAlpha = .4) %>%
 #         dyOptions(colors = c("navy"),
 #                   fillGraph = TRUE)
-#   } else if (input$graph2_var == "vpd") {
-#      click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
+#   } else if (input$variable1 == "vpd") {
+#      click <<- input$catchMap_click %>%
+#       data.frame() %>%
 #       dplyr::select(lat,lng)
 #         print(click)
-#       pt <- sf::st_as_sf(click, 
-#                           coords = c("lng", "lat"), 
+#       pt <- sf::st_as_sf(click,
+#                           coords = c("lng", "lat"),
 #                           crs = 4326)
-#       
+# 
 #       print("vpd")
 #     mean_vap_pressure <- climateR::getTerraClim(AOI = pt, param = "vpd",
 #                                startDate = "1993-01-01",
 #                                endDate = "2015-01-01")
-# 
 #       mean_vap_pressure$date <- paste0(mean_vap_pressure$date, "-01")
 #       mean_vap_pressure$date <- as.Date(mean_vap_pressure$date)
 #       rownames(mean_vap_pressure) <- mean_vap_pressure$date
 #       mean_vap_pressure <- select(mean_vap_pressure, vpd)
-#       
+# 
 #       dygraph(data = mean_vap_pressure) %>%
 #         dyHighlight(highlightCircleSize = 4,
 #                     highlightSeriesBackgroundAlpha = .4) %>%
 #         dyOptions(colors = c("navy"),
 #                   fillGraph = TRUE)
-#   } else if (input$graph2_var == "wind") {
-#     click <<- input$catchMap_click %>% 
-#       data.frame() %>% 
+#   } else if (input$variable1 == "wind") {
+#     click <<- input$catchMap_click %>%
+#       data.frame() %>%
 #       dplyr::select(lat,lng)
 #         print(click)
-#       pt <- sf::st_as_sf(click, 
-#                           coords = c("lng", "lat"), 
+#       pt <- sf::st_as_sf(click,
+#                           coords = c("lng", "lat"),
 #                           crs = 4326)
-#       
+# 
 #       print("vpd")
 #     wi <- climateR::getTerraClim(AOI = pt, param = "wind",
 #                                startDate = "1993-01-01",
 #                                endDate = "2015-01-01")
-# 
 #       wi$date <- paste0(wi$date, "-01")
 #       wi$date <- as.Date(wi$date)
 #       rownames(wi) <- wi$date
 #       wi <- select(wi, wind)
-#       
+# 
 #       dygraph(data = wi) %>%
 #         dyHighlight(highlightCircleSize = 4,
 #                     highlightSeriesBackgroundAlpha = .4) %>%
 #         dyOptions(colors = c("navy"),
 #                   fillGraph = TRUE)
 #   }
-# 
 # })
-# 
-# output$graph2 <- renderDygraph({
-#    graphData2()
-#   })
-
-```   
-
-
-
+output$graph1 <- renderDygraph({
+   graphData1()
+  })
+```    
