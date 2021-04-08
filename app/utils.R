@@ -25,7 +25,7 @@ second_map <- function() {
     addProviderTiles(providers$Esri.WorldImagery) %>%
     addScaleBar("bottomleft") %>%
     setView(-95,40,4) %>%
-    addMiniMap(toggleDisplay = TRUE, minimized = FALSE) %>%
+    # addMiniMap(toggleDisplay = TRUE, minimized = FALSE) %>%
     addMeasure(
       position = "bottomleft",
       primaryLengthUnit = "feet",
@@ -34,6 +34,24 @@ second_map <- function() {
       completedColor = "green" ) %>%
     leafem::addMouseCoordinates()
 }
+# second_map <- function() {
+#   # pal = colorNumeric("inferno", reverse= TRUE, domain = today$size, n = 50)
+#   # pal2 <- colorNumeric("inferno", reverse = TRUE, domain = today$cases, n = 50)
+#   leaflet() %>%
+#     addProviderTiles(providers$Esri.WorldImagery) %>%
+#     addScaleBar("bottomleft") %>%
+#     setView(-95,40,4) %>%
+#     # addMiniMap(toggleDisplay = TRUE, minimized = FALSE) %>%
+#     addMeasure(
+#       position = "bottomleft",
+#       primaryLengthUnit = "feet",
+#       primaryAreaUnit = "sqmiles",
+#       activeColor = "red",
+#       completedColor = "green" ) %>%
+#     addRasterImage(x = rasterData())
+#     leafem::addMouseCoordinates()
+# }
+
 
 zoom_to_catch = function(map, df, catchment){
   # Filter the counties to the input FIP code
@@ -74,29 +92,30 @@ zoom_to_catch = function(map, df, catchment){
 # bb = buffer %>%
 #   st_bbox()
 # bb_pts <- data.frame(x = c(bb[1], bb[3]), y = c(bb[2], bb[4]))
-#
-# lat = 35.6643
-# lng = -96.91935
-# pt <- data.frame(lat, lng)
-# pt <- sf::st_as_sf(pt,
-#                    coords = c("lng", "lat"),
-#                    crs = 4326)
-# buffer <- pt %>%
-#   st_transform(5070) %>%
-#   st_buffer(30000) %>%
-#   st_transform(4326)
-#
-# bb = buffer %>%
-#   st_bbox() %>%
-#   st_as_sfc() %>%
-#   st_transform(4326) %>%
-#   st_as_sf()
-#
-# rain <- climateR::getGridMET(AOI = bb, "tmax", startDate = "2010-01-01")
-#
+
+lat = 35.6643
+lng = -96.91935
+pt <- data.frame(lat, lng)
+pt <- sf::st_as_sf(pt,
+                   coords = c("lng", "lat"),
+                   crs = 4326)
+buffer <- pt %>%
+  st_transform(5070) %>%
+  st_buffer(30000) %>%
+  st_transform(4326)
+
+bb = buffer %>%
+  st_bbox() %>%
+  st_as_sfc() %>%
+  st_transform(4326) %>%
+  st_as_sf()
+
+rain <- climateR::getGridMET(AOI = bb, "tmax", startDate = "2010-01-01")
+
+plot(rain$tmax)
 # values(rain$tmax)
-#
-# mapview::mapView(rain$tmax, layer.name = "raster")
+
+mapview::mapView(rain$tmax, layer.name = "raster")
 #
 # pal <- colorNumeric(c("#0C2C84", "#41B6C4", "#FFFFCC"), values(r),
 #                     na.color = "transparent")

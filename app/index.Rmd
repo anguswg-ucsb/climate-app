@@ -114,13 +114,13 @@ leafletOutput("catchMap2")
     print("map1_click")
     
     # catch_df <- get_nhdplus(comid = comid, realization = "catchment")
-    bb <- pt %>%
+    buffer <- pt %>%
       st_buffer(2)
     
     # output$comidBox <- renderValueBox({
     # valueBox(value = paste("COMID: ", comid)) })
     
-    bounds <- st_bbox(bb) %>% 
+    bounds <- st_bbox(buffer) %>% 
       st_as_sfc() %>% 
       st_buffer(2) %>% 
       st_bbox() %>% 
@@ -130,7 +130,7 @@ leafletOutput("catchMap2")
       clearMarkers() %>%
       clearShapes() %>% 
       addMarkers(data = pt) %>% 
-       addPolygons(data = bb,
+       addPolygons(data = buffer,
                    fillColor = 'red',
                    col = "black",
                    weight = 2) %>%
@@ -141,7 +141,7 @@ leafletOutput("catchMap2")
       clearMarkers() %>%
       clearShapes() %>%
       addMarkers(data = pt) %>% 
-      addPolygons(data = bb,
+      addPolygons(data = buffer,
                    fillColor = 'red',
                    col = "black",
                    weight = 2) %>%
@@ -176,7 +176,7 @@ observeEvent(input$catchMap2_click, {
       clearMarkers() %>%
       clearShapes() %>% 
       addMarkers(data = pt) %>% 
-       addPolygons(data = bb,
+       addPolygons(data = buffer,
                    fillColor = 'red',
                    col = "black",
                    weight = 2) %>%
@@ -187,7 +187,7 @@ observeEvent(input$catchMap2_click, {
       clearMarkers() %>%
       clearShapes() %>%
       addMarkers(data = pt) %>% 
-      addPolygons(data = bb,
+      addPolygons(data = buffer,
                    fillColor = 'red',
                    col = "black",
                    weight = 2) %>%
@@ -205,40 +205,40 @@ observeEvent(input$catchMap2_click, {
         setView(lat = coords$lat, lng = coords$lng, zoom = zoom)
     }
 })
-
-rasterData <- eventReactive(input$submitButton, {
-  if(!is.null(input$catchMap_click) & input$graph1_var == "tmax") {
-    click <<- input$catchMap_click %>% 
-      data.frame() %>% 
-      dplyr::select(lat,lng)
-    
-    print("raster click")
-    pt <- sf::st_as_sf(click, 
-                        coords = c("lng", "lat"), 
-                        crs = 4326)
-      buffer <- pt %>%
-        st_transform(5070) %>%
-        st_buffer(30000) 
-      
-      bb = buffer %>%
-        st_bbox() %>%
-        st_as_sfc() %>%
-        st_transform(4326) %>%
-        st_as_sf()
-      
-      temp <- climateR::getGridMET(AOI = bb, "tmax", startDate = "2010-01-01")
-      tmax <- temp$tmax[[1]]
-
-      leafletProxy("catchMap") %>%
-          clearMarkers() %>%
-          clearShapes() %>%
-          addRasterImage(x = tmax)
-  }
-})
-
-output$catchMap <- renderLeaflet({
-  rasterData()
-})
+# 
+# rasterData <- eventReactive(input$submitButton, {
+#   if(!is.null(input$catchMap_click) & input$graph1_var == "tmax") {
+#     click <<- input$catchMap_click %>% 
+#       data.frame() %>% 
+#       dplyr::select(lat,lng)
+#     
+#     print("raster click")
+#     pt <- sf::st_as_sf(click, 
+#                         coords = c("lng", "lat"), 
+#                         crs = 4326)
+#       buffer <- pt %>%
+#         st_transform(5070) %>%
+#         st_buffer(30000) 
+#       
+#       bb = buffer %>%
+#         st_bbox() %>%
+#         st_as_sfc() %>%
+#         st_transform(4326) %>%
+#         st_as_sf()
+#       
+#       temp <- climateR::getGridMET(AOI = bb, "tmax", startDate = "2010-01-01")
+#       tmax <- temp$tmax[[1]]
+# 
+#       leafletProxy("catchMap") %>%
+#           clearMarkers() %>%
+#           clearShapes() %>%
+#           addRasterImage(x = tmax)
+#   }
+# })
+# 
+# output$catchMap <- renderLeaflet({
+#   rasterData()
+# })
 ```
 
 Row
