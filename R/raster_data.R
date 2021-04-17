@@ -84,6 +84,8 @@ bb = buffer %>%
 # using aoi2 as an example of the tidy stacked points we will have from prediction data
 # plan - filter prediction data by the bounding box of clicked polygon, use daily mean of parameter to average all of the points in the area
 # grab a single day from one of the points and plot mean timeseries
+
+# Map click
 lng = -120.08
 lat = 34.75
 
@@ -92,10 +94,11 @@ pt <- sf::st_as_sf(pt,
                    coords = c("lng", "lat"),
                    crs = 4326)
 
-point_to_tidy_raster <- function(pt, param, start_date = NULL, end_date = NULL) {
+# Takes map click --> creates extent polygon --> gets climate raster for prediction --> outputs point raster
+click_to_raster <- function(pt, param, start_date = NULL, end_date = NULL) {
   buffer <- pt %>%
     st_transform(5070) %>%
-    st_buffer(5000) %>%
+    st_buffer(4000) %>%
     st_transform(4326)
 
   bb = buffer %>%
@@ -103,22 +106,80 @@ point_to_tidy_raster <- function(pt, param, start_date = NULL, end_date = NULL) 
     st_as_sfc() %>%
     st_transform(4326) %>%
     st_as_sf()
-  clim <- climateR::getGridMET(AOI = bb,
+  r <- climateR::getGridMET(AOI = bb,
                                as.character(param),
                                startDate = as.character(start_date),
                                endDate = as.character(end_date))
-  tidy_stack(clim, as_sf = FALSE)
+  #tidy_stack(clim, as_sf = TRUE)
+
+  # missing step for final:
+  # 1. aggregate_gridmet() replaces getGridMET
+  # 2. Machine learn on aggregated climate rasters
 }
 
-pt_raster <- point_to_tidy_raster(pt, "tmax", "1980-01-01", '1980-03-01')
 
-predictRaster <- function(pt_raster, ) {
-  # Convert points to sp (assumes that the sf object is called example_points)
+
+# climate raster stack
+clim <- click_to_raster(pt, "tmax", "1980-01-01", '1980-02-01')
+
+# climate points from raster (this will be the outputted prediction raster in final)
+pt_raster <- tidy_stack(clim, as_sf = TRUE)
+
+predictRaster <- function(pt_rast) {
+  # get empty raster, set values to 0
+  empty_raster <- raster::projectExtent(object = clim$tmax[[1]],
+                                crs = clim$tmax@crs) %>%
+    raster::setValues(value = 0)
+
+  # Convert points to sp
+  agg <- as(pt_rast, "Spatial")
+
+  # rastorize prediction points into empty raster grid --- currently rasterizes "last" layer in stack
+  r <- rasterize(agg, empty_raster, field = "tmax")
+}
+
+prediction <- predictRaster(pt_rast = pt_raster)
+
+# get mean temperature of all cells on a day (raster layer) --- we need a different time series method but this is a generic outline for testing
+timeseries_data <- function(pts) {
+  agg <- pts %>%
+    st_drop_geometry() %>%
+    group_by(date) %>%
+    mutate(mean = mean(tmax)) %>%
+    slice(n = 1)
+
+  agg$date <- as.Date(agg$date)
+  agg <- data.frame(agg)
+  rownames(agg) <- agg$date
+  agg
+}
+
+averages <- dailyMean(pts = pt_raster)
+
+make_timeseries <- function(xts_df) {
+  dygraph(data = dplyr::select(xts_df, mean)) %>%
+    dyHighlight(highlightCircleSize = 4,
+                highlightSeriesBackgroundAlpha = .4) %>%
+    dyOptions(colors = c("darkred"),
+              fillGraph = TRUE)
+}
+
+make_timeseries(averages)
+
+
+
+
+
+# Other method for prediction raster from points
+predictRaster2 <- function(rast, param, pt_rast) {
+  # Convert points to sp
   agg <- as(pt_raster, "Spatial")
 
-  res <- raster::res(clim$tmax[[1]])
+  # Resolution
+  res <- raster::res(rast$param[[1]])
 
-  rextent <- clim$tmax@extent
+  # exent
+  rextent <- rast$param@extent
 
   # Generate empty raster layer and rasterize points
   r <- raster(crs = crs(agg),
@@ -127,8 +188,6 @@ predictRaster <- function(pt_raster, ) {
               ext = rextent) %>%
     rasterize(agg, .)
 
-
-  plot(clim$tmax[[1]])
 }
 
 clim <- climateR::getGridMET(AOI = aoi2, "tmax", startDate = "2010-01-01", endDate = "2010-06-03")
