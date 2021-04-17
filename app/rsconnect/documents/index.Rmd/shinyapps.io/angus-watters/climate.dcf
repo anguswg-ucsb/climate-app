@@ -5,8 +5,8 @@ account: angus-watters
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 3890917
-bundleId: 4415883
+bundleId: 4447166
 url: https://angus-watters.shinyapps.io/climate/
-when: 1617197097.04593
+when: 1617897734.40251
 asMultiple: FALSE
 asStatic: FALSE

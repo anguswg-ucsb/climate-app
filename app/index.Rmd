@@ -23,6 +23,7 @@ library(sf)
 library(dplyr)
 library(raster)
 library(dygraphs)
+
 source('utils.R')
 ```
 
@@ -36,10 +37,10 @@ output$catchMap2     <- renderLeaflet({ second_map() })
 param <- reactive({
   var <- input$variable1
 })
-point <- reactive({
-    point <-  input$catchMap_click
-    point <-  input$catchMap2_click
-})
+# point <- reactive({
+#     point <-  input$catchMap_click
+#     point <-  input$catchMap2_click
+# })
 
 ```
 
@@ -53,12 +54,23 @@ Inputs {.sidebar}
 
 ### Model Filters
 ```{r}
-dateInput("dateTS", label = "Date Input",
-               value = (Sys.Date() -1),
+dateRangeInput("dateTS", label = "Date Input",
+          start = "1980-01-01",
+          end = "2010-01-01",
+               # value = (Sys.Date() -1),
                min = "1980-01-01",
-               max = (Sys.Date() -1),
+          max = "2010-01-01",
+               # max = (Sys.Date() -1),
                format = "yyyy mm dd",
                weekstart = 1)
+# dateInput("dateTS", label = "Date Input",
+#           value = "2000-01-01",
+#                # value = (Sys.Date() -1),
+#                min = "1980-01-01",
+#           max = "2010-01-01",
+#                # max = (Sys.Date() -1),
+#                format = "yyyy mm dd",
+#                weekstart = 1)
 selectInput("variable1",
             label = "Variable", 
             choices = c('prcp', 'rhmax', 'rhmin', 'shum', 'srad', 'wind_dir', 'tmin', 'tmax', 'wind_vel', 'burn_index', 'fmoist_100', 'fmoist_1000', 'energy_release', 'palmer', 'pet_alfalfa', 'pet_grass', 'vpd'))
@@ -152,7 +164,9 @@ leafletOutput("catchMap2")
     }
 })
 observeEvent(input$submitButton, {
-  if(!is.null(input$variable1)) {
+  if(is.null(input$catchMap_click)){
+    NULL
+  } else if(!is.null(input$variable1)) {
       click <- input$catchMap_click %>%
         data.frame() %>%
         dplyr::select(lat,lng)
@@ -181,36 +195,83 @@ observeEvent(input$submitButton, {
       rast <- climateR::getGridMET(AOI = bb, var, startDate = dateText())
       print("raster1")
       print(var)
-      
+
         r <- rast[[var]][[1]]
-      leafletProxy("catchMap2") %>% 
+      leafletProxy("catchMap2") %>%
           clearMarkers() %>%
           clearShapes() %>%
           clearImages() %>%
-          addRasterImage(x = r) %>% 
+          addRasterImage(x = r) %>%
         flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
-   
+
   }
 })
 
 dateText <- eventReactive(input$submitButton, {
-    format.Date(input$dateTS)
+    paste(format.Date(input$dateTS[1]), format.Date(input$dateTS[2]), class(format.Date(input$dateTS[2])))
   })
 output$dateInputText <- renderText({
    dateText()
   })
 # output$catchMap2 <- renderLeaflet({
 #  rasterData()
+
 # })
 # click on map 2 will render polygon, point on map 1 and 3
 
 ```
 
+```{r context = "server"}
+# check if change is triggered by user or by reactivity, dygraph won't update date range input is changed because range selector is used to change dygraph
+  r <- reactiveValues(
+    change_datewindow = 0,
+    change_dateTS = 0,
+    change_datewindow_auto = 0,
+    change_dateTS_auto = 0,
+    dateTS = c(start = "1993-01-01",
+               end = "2018-12-31")
+  )
+ # dygraph updates if user interacts with range slider 
+  observeEvent(input$graphTS_date_window, {
+    message(crayon::blue("observeEvent_input_graphTS_date_window"))
+    r$change_datewindow <- r$change_datewindow + 1
+    if (r$change_datewindow > r$change_datewindow_auto) {
+      r$change_dateTS_auto <- r$change_dateTS_auto + 1
+      r$change_datewindow_auto <- r$change_datewindow
+    start <- as.Date(ymd_hms(input$graphTS_date_window[[1]]))
+    stop  <- as.Date(ymd_hms(input$graphTS_date_window[[2]]))
+   updateDateRangeInput(session = session,
+                       inputId = "dateTS",
+                       start = start,end = stop
+                       )
+      
+    } else {
+      if (r$change_datewindow >= 10) {
+        r$change_datewindow_auto <- r$change_datewindow <- 0
+      }
+    }
+  })
+  # dygraph updates if date range is inputted
+  observeEvent(input$dateTS, {
+    message("observeEvent_input_dateTS")
+    r$change_dateTS <- r$change_dateTS + 1
+    if (r$change_dateTS > r$change_dateTS_auto) {
+      message("event input_year update")
+      r$change_datewindow_auto <- r$change_datewindow_auto + 1
+      r$change_dateTS_auto <- r$change_dateTS
+      r$dateTS <- input$dateTS
+    } else {
+      if (r$change_dateTS >= 10) {
+        r$change_dateTS_auto <- r$change_dateTS <- 0
+      }
+    }
+  })
+```
 Row
 -----------------------------------------------------------------------
-### graph1
+### graphTS
 ```{r}
-dygraphOutput ('graph1')
+dygraphOutput ('graphTS')
 ```
 
 ```{r, fig.keep='none'}
@@ -225,8 +286,11 @@ graphData1 <- eventReactive(input$submitButton, {
                             crs = 4326)
         var <- param()
         print("evap")
-        clim <- climateR::getTerraClim(AOI = pt, param = var,
-                                    startDate = "1993-01-01",
+        clim <- climateR::getGridMET(AOI = pt,
+                                     param = var,
+                                     # startDate = as.character(Sys.Date() -120),
+                                     # endDate = as.character(Sys.Date() -1))
+                                    startDate = "1980-01-01",
                                     endDate = "2015-01-01")
         clim$date <- paste0(clim$date, "-01")
         clim$date <- as.Date(clim$date)
@@ -236,9 +300,15 @@ graphData1 <- eventReactive(input$submitButton, {
           dyHighlight(highlightCircleSize = 4,
                     highlightSeriesBackgroundAlpha = .4) %>%
               dyOptions(colors = c("darkred"),
-                  fillGraph = TRUE)
+                  fillGraph = TRUE) %>%
+          dyRangeSelector(dateWindow = c(as.character(r$dateTS[1] + 1),
+                                         as.character(r$dateTS[2] + 1)))
     }
 })
+
+output$graphTS <- renderDygraph({
+   graphData1()
+  })
 #   } else if (input$variable1 == "water_deficit") {
 #     click <<- input$catchMap_click %>%
 #       data.frame() %>%
@@ -545,7 +615,4 @@ graphData1 <- eventReactive(input$submitButton, {
 #                   fillGraph = TRUE)
 #   }
 # })
-output$graph1 <- renderDygraph({
-   graphData1()
-  })
 ```    
