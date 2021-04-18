@@ -148,75 +148,71 @@ aggregate_gridmet <- function(aoi, start_date, end_date = NULL, as_sf = FALSE) {
   tidy_clim
 }
 
-#
-# lat = 35.6643
-# lng = -96.91935
-# pt <- data.frame(lat, lng)
-# pt <- sf::st_as_sf(pt,
-#                    coords = c("lng", "lat"),
-#                    crs = 4326)
-# buffer <- pt %>%
-#   st_transform(5070) %>%
-#   st_buffer(.05)
-#
-#
-# bb <- bb_poly(buffer) %>%
-#   st_sf() %>%
-#   st_transform(4326)
-# class(bb)
-#
-# library(raster)
-# bb = buffer %>%
-#   st_bbox()
-# bb_pts <- data.frame(x = c(bb[1], bb[3]), y = c(bb[2], bb[4]))
-#
-# lat = 35.6643
-# lng = -96.91935
-# pt <- data.frame(lat, lng)
-# pt <- sf::st_as_sf(pt,
-#                    coords = c("lng", "lat"),
-#                    crs = 4326)
-# buffer <- pt %>%
-#   st_transform(5070) %>%
-#   st_buffer(30000)
-#
-# bb = buffer %>%
-#   st_bbox() %>%
-#   st_as_sfc() %>%
-#   st_transform(4326) %>%
-#   st_as_sf()
-#
-# rain <- climateR::getGridMET(AOI = bb, "prcp", startDate = "2010-01-01")
-#
-# mapview::mapview(bb)
-#
-# library(AOI)
-# aoi <- aoi_get(state = "Oklahoma")
-# plot(bb)
-# class(bb)
-# rain <- climateR::getGridMET(AOI = bb, "prcp", startDate = "2010-01-01")
-# plot(rain$prcp)
-# plot(aoi_get(state = "Oklahoma")$geometry, add = TRUE)
-# plot(rain$prcp)
-# r1 <- raster(rain$prcp)
-# mapview::mapview(bb)
-#
-# values(stack(rain))
-#
-# leaflet::leaflet() %>%
-#   addProviderTiles(providers$OpenStreetMap) %>%
-#   addPolygons(data = bb, color = "red")
-#
-# runoff <- climateR::getTerraClim(AOI = pt, param = "q",
-#                                  startDate = "1993-01-01",
-#                                  endDate = "2015-01-01")
-#
-# runoff$date <- paste0(runoff$date, "-01")
-# runoff$date <- as.Date(runoff$date)
-# rownames(runoff) <- runoff$date
-# runoff <- select(runoff, q)
-#
-# dygraph(data = runoff)
-#
+# Takes map click --> creates extent polygon --> gets climate raster for prediction --> outputs point raster
+
+click_to_AOI <- function(pt) {
+  buffer <- pt %>%
+    st_transform(5070) %>%
+    st_buffer(4000) %>%
+    st_transform(4326)
+
+  bb = buffer %>%
+    st_bbox() %>%
+    st_as_sfc() %>%
+    st_transform(4326) %>%
+    st_as_sf()
+}
+
+# map click --> get AOI climate raster
+click_to_raster <- function(bb, param, start_date = NULL, end_date = NULL) {
+
+  r <- climateR::getGridMET(AOI = bb,
+                            as.character(param),
+                            startDate = as.character(start_date),
+                            endDate = as.character(end_date))
+  #tidy_stack(clim, as_sf = TRUE)
+
+  # missing step for final:
+  # 1. aggregate_gridmet() replaces getGridMET
+  # 2. Machine learn on aggregated climate rasters
+}
+
+predictRaster <- function(pt_rast) {
+  # get empty raster, set values to 0
+  empty_raster <- raster::projectExtent(object = clim$tmax[[1]],
+                                        crs = clim$tmax@crs) %>%
+    raster::setValues(empty_raster, value = 0)
+
+  # Convert points to sp
+  agg <- as(pt_rast, "Spatial")
+
+  # rastorize prediction points into empty raster grid --- currently rasterizes "last" layer in stack
+  r <- rasterize(agg, empty_raster, field = "tmax")
+}
+
+
+# get mean temperature of all cells on a day (raster layer) --- we need a different time series method but this is a generic outline for testing
+timeseries_data <- function(pts) {
+  agg <- pts %>%
+    st_drop_geometry() %>%
+    group_by(date) %>%
+    mutate(mean = mean(tmax)) %>%
+    slice(n = 1)
+
+  agg$date <- as.Date(agg$date)
+  agg <- data.frame(agg)
+  rownames(agg) <- agg$date
+  agg
+}
+
+make_timeseries <- function(xts_df) {
+  dygraph(data = dplyr::select(xts_df, mean)) %>%
+    dyHighlight(highlightCircleSize = 4,
+                highlightSeriesBackgroundAlpha = .4) %>%
+    dyOptions(colors = c("darkred"),
+              fillGraph = TRUE)
+}
+
+
 
 
