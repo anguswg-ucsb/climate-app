@@ -23,6 +23,7 @@ library(sf)
 library(raster)
 library(dplyr)
 library(dygraphs)
+library(DT)
 
 source('utils.R')
 ```
@@ -52,7 +53,7 @@ raster_data <- eventReactive(input$submitButton, {
   var <-  param()
   bb <- click_to_AOI(click_pt())
   print("click_to_raster")
-  click_to_raster(bb, var, dateText1(), dateText2())
+  click_to_raster(bb, "burn_index", dateRangeText1(), dateRangeText1())
 })
 # point <- reactive({
 #     point <-  input$catchMap_click
@@ -71,12 +72,12 @@ Inputs {.sidebar}
 
 ### Model Filters
 ```{r}
-dateRangeInput("dateTS", label = "Date Input",
+dateRangeInput("dateRangeTS", label = "Date Input",
           start = "1980-01-01",
-          end = "1980-02-01",
+          end = "1985-02-01",
                # value = (Sys.Date() -1),
                min = "1980-01-01",
-          max = "1980-02-01",
+          max = "2020-01-01",
                # max = (Sys.Date() -1),
                format = "yyyy mm dd",
                weekstart = 1)
@@ -90,11 +91,16 @@ dateRangeInput("dateTS", label = "Date Input",
 #                weekstart = 1)
 selectInput("variable1",
             label = "Variable", 
-            choices = c('prcp', 'rhmax', 'rhmin', 'shum', 'srad', 'wind_dir', 'tmin', 'tmax', 'wind_vel', 'burn_index', 'fmoist_100', 'fmoist_1000', 'energy_release', 'palmer', 'pet_alfalfa', 'pet_grass', 'vpd'))
+            choices = c('burn_index', 'prcp', 'rhmax',
+                        'rhmin', 'shum', 'tmin', 'tmax'))
 
 verbatimTextOutput("dateInputText1")
 
-verbatimTextOutput("dateInputText2")
+verbatimTextOutput("dateRangeInput1")
+
+verbatimTextOutput("dateRangeInput2")
+
+# verbatimTextOutput("dateInputText2")
 
 ```
 
@@ -121,56 +127,38 @@ leafletOutput("catchMap2")
 # Clicking on map 1 outputs Value boxes on both pages + catchment polygons + Dat table + info panel
   observeEvent(input$catchMap_click, {
    if(!is.null(input$catchMap_click)) {
-    # click <- input$catchMap_click %>% 
-    #   data.frame() %>% 
-    #   dplyr::select(lat,lng)
-    # print(click)
-    # pt <- sf::st_as_sf(click, 
-    #                     coords = c("lng", "lat"), 
-    #                     crs = 4326)
-    # 
-    # 
-    #   
-    #   bb <- click_to_AOI(pt)
-    #   
-    #   # Map 2 fly to bounds
-      # bounds <- st_bbox(bb) %>%
-      #     st_as_sfc() %>%
-      #     st_buffer(0.15) %>%
-      #     st_bbox() %>%
-      #     as.vector()
-      # temp <- climateR::getGridMET(AOI = bb, "tmax", startDate = "2010-01-01")
-      # tmax <- temp$tmax[[1]]
       pt <- click_pt()
-    bb <- click_to_AOI(pt)
-    
-    bounds <- st_bbox(bb) %>%
-          st_as_sfc() %>%
-          st_buffer(0.15) %>%
-          st_bbox() %>%
-          as.vector()
-    leafletProxy("catchMap") %>% 
-      clearMarkers() %>%
-      clearShapes() %>% 
-      addMarkers(data = pt) %>% 
-       addPolygons(data = bb,
-                   fillColor = 'red',
-                   col = "black",
-                   weight = 2) %>%
-    flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
-    
-    leafletProxy("catchMap2") %>%
-      clearMarkers() %>%
-      clearShapes() %>%
-      # clearImages() %>% 
-      # addRasterImage(x = tmax) %>% 
-       addMarkers(data = pt) %>% 
-       addPolygons(data = bb,
-                   fillColor = 'red',
-                   col = "black",
-                   weight = 2) %>%
+      bb <- click_to_AOI(pt)
+
+      bounds <- st_bbox(bb) %>%
+            st_as_sfc() %>%
+            st_buffer(0.15) %>%
+            st_bbox() %>%
+            as.vector()
+      leafletProxy("catchMap") %>%
+        clearMarkers() %>%
+        clearShapes() %>%
+        addMarkers(data = pt) %>%
+         addPolygons(data = bb,
+                     fillColor = 'red',
+                     col = "black",
+                     weight = 2) %>%
       flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
-   } 
+
+      # pred <- pointRaster()
+
+      leafletProxy("catchMap2") %>%
+        clearMarkers() %>%
+        clearShapes() %>%
+        clearImages() %>%
+        # addRasterImage(x = pred) %>%
+         addMarkers(data = pt) %>%
+         addPolygons(data = bb,
+                     fillColor = 'red',
+                     col = "black",
+                     weight = 2) %>%
+        flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+     }
 
 })
 
@@ -190,14 +178,6 @@ observeEvent(input$submitButton, {
     NULL
   } else if(!is.null(input$variable1)) {
       var <- param()
-      # click <- input$catchMap_click %>%
-      #   data.frame() %>%
-      #   dplyr::select(lat,lng)
-      #
-      # print("submit button")
-      # pt <- sf::st_as_sf(click,
-      #                     coords = c("lng", "lat"),
-      #                     crs = 4326)
       pt <- click_pt()
       bb <- click_to_AOI(pt)
 
@@ -211,9 +191,11 @@ observeEvent(input$submitButton, {
       # rast <- climateR::getGridMET(AOI = bb, var, startDate = dateText())
       print("raster1")
       print(var)
-
+      # pred <- pointRaster()
         # r <- rast[[var]][[1]]
+      r <- raster_data
       # r <- click_to_raster(bb, var, dateText1(), dateText2())
+      # r <- r[[var]][[1]]
       leafletProxy("catchMap2") %>%
           clearMarkers() %>%
           clearShapes() %>%
@@ -225,20 +207,28 @@ observeEvent(input$submitButton, {
 })
 
 # Testing reactive date inputs
-dateText1 <- eventReactive(input$submitButton, {
-    format.Date(input$dateTS[1])
+# dateText1 <- eventReactive(input$submitButton, {
+#     format.Date(input$dateTS)
+#   })
+# 
+# output$dateInputText1 <- renderText({
+#    dateText1()
+#   })
+
+dateRangeText1 <- eventReactive(input$submitButton, {
+    format.Date(input$dateRangeTS[1])
   })
 
-output$dateInputText1 <- renderText({
-   dateText1()
+output$dateRangeInput1 <- renderText({
+   dateRangeText1()
   })
 
-dateText2 <- eventReactive(input$submitButton, {
-    format.Date(input$dateTS[2])
+dateRangeText2 <- eventReactive(input$submitButton, {
+    format.Date(input$dateRangeTS[2])
   })
 
-output$dateInputText2 <- renderText({
-   dateText2()
+output$dateRangeInput2 <- renderText({
+   dateRangeText2()
   })
 ```
 
@@ -246,51 +236,76 @@ Row
 ---------------------------------------
 ### datatable
 ```{r}
-DT::DTOutput('tidyDatatable')
+# DT::DTOutput('tidyDatatable')
 ```
 
 ```{r context = "server"}
 tidy_data <- eventReactive(input$submitButton, {
   tidy_stack(raster_data(), as_sf = TRUE)
 })
-
-output$tidyDatatable <- DT::renderDT({
-  df <- tidy_data() %>% 
-    st_drop_geometry()
-  DT::datatable(tidy_data())
-})
+# 
+# output$tidyDatatable <- DT::renderDT({
+#   df <- tidy_data() %>%
+#     st_drop_geometry()
+#   DT::datatable(tidy_data())
+# })
 ```
 
-### prediction raster 
+### raster plot
 ```{r}
-plotOutput("pointRasterPlot")
+plotOutput("rasterPlot")
 ```
 
 
 ```{r context = "server"}
-pointRaster <- eventReactive(input$submitButton,{
-  # predictRaster(tidy_data())
+# pointRaster <- eventReactive(input$submitButton,{
+#   # predictRaster(tidy_data())
+#   r <- raster_data()
+#   var = param()
+#   empty_raster <- raster::projectExtent(object = r[[var]][[1]],
+#                                         crs = r[[var]]@crs) %>%
+#     raster::setValues(empty_raster, value = 0)
+# 
+#   # Convert points to sp
+#   agg <- as(tidy_data(), "Spatial")
+# 
+#   # rastorize prediction points into empty raster grid --- currently rasterizes "last" layer in stack
+#   rasterize(agg, empty_raster, field = var)
+# })
+layer <- eventReactive(input$submitButton,{
   r <- raster_data()
-  empty_raster <- raster::projectExtent(object = r$tmax[[1]],
-                                        crs = r$tmax@crs) %>%
-    raster::setValues(empty_raster, value = 0)
 
-  # Convert points to sp
-  agg <- as(tidy_data(), "Spatial")
-
-  # rastorize prediction points into empty raster grid --- currently rasterizes "last" layer in stack
-  rasterize(agg, empty_raster, field = "tmax")
 })
 
-output$pointRasterPlot <- renderPlot({
-  pred <- pointRaster()
-  plot(pred)
+output$rasterPlot <- renderPlot({
+  r <- layer()
+  names(r) <- "burn_index"
+  plot(r[["burn_index"]][[1]])
 })
 ```
 
+### timeseries
+```{r}
+dygraphOutput("predictionGraph")
+```
 
+```{r context = "server"}
+ts_data <- eventReactive(input$submitButton, {
+  bb <- click_to_AOI(click_pt())
+ 
+  # maca <- aggregate_maca(bb, dateRangeText1(), dateRangeText2(), as_sf = FALSE)
+  # maca
+  clim <- climateR::getGridMET(AOI = pt, var, dateRangeText1(), dateRangeText2())
+  clim
+})
 
-
+output$predictionGraph <- renderDygraph({
+  var <- param()
+  df2 <- ts_data() 
+  ts <- timeseries_data(df2) %>% 
+    make_timeseries(var)
+})
+```
 
 
 

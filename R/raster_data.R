@@ -8,9 +8,9 @@ library(raster)
 library(dygraphs)
 
 
-
 aoi <- aoi_get(state = "CA") %>%
   st_transform(4326)
+
 aoi2 <- aoi_get(state = "CA", county = "Santa Barbara")
 
 leaflet() %>%
@@ -40,15 +40,13 @@ bb = buffer %>%
 
 mapview::mapview(bb)
 
- clim <- climateR::getGridMET(AOI = bb, "tmax", startDate = "2010-01-01", endDate = "2010-03-01")
- clim$tmax[[1]]@extent
+ clim <- climateR::getGridMET(AOI = bb, "burn_index", startDate = "2008-08-01", endDate = "2008-11-01")
 
- agg <- aggregate_gridmet(bb, "2010-01-01", "2010-03-01", as_sf = TRUE)
- clim@extent
- r <- raster(nrow = 6, ncol = 6, xmn = -120.2042,
-             xmx = -119.9542,
-             ymn = 34.62917,
-             ymx = 34.87917)
+layer <- clim$gridmet_burn_index[[1]]
+plot(layer)
+agg <- aggregate_gridmet(bb, "2008-08-01", "2008-11-01", as_sf = TRUE)
+
+ plot(agg)
 
 
  # Load packages
@@ -112,7 +110,6 @@ bb <- click_to_AOI(pt)
 
 # map click --> get AOI climate raster
 click_to_raster <- function(bb, param, start_date = NULL, end_date = NULL) {
-  bb <- click_to_AOI(pt)
   r <- climateR::getGridMET(AOI = bb,
                                as.character(param),
                                startDate = as.character(start_date),
@@ -131,6 +128,7 @@ clim <- click_to_raster(bb, "tmax", "1980-01-01", '1980-01-07')
 
 # climate points from raster (this will be the outputted prediction raster in final)
 pt_raster <- tidy_stack(clim, as_sf = TRUE)
+
 m <- pt_raster %>%
   st_drop_geometry()
 DT::datatable(m)
@@ -149,10 +147,32 @@ predictRaster <- function(pt_rast) {
 }
 
 prediction <- predictRaster(pt_rast = pt_raster)
+vals <- values(prediction)
+pal = colorNumeric("Ylo", domain = vals, n = 50)
+pal2 <- colorNumeric("viridis", domain = today$cases, n = 50)
+leaflet() %>%
+  addProviderTiles(providers$OpenStreetMap, group = "Topographic") %>%
+  addProviderTiles(providers$Esri.WorldShadedRelief, group = "Relief") %>%
+  addLayersControl(options = layersControlOptions(collapsed = FALSE),
+                   baseGroups = c('Topographic', "Relief")) %>%
+  addScaleBar("bottomleft") %>%
+  addRasterImage(x = prediction) %>%
+  addLegend("bottomright", pal = pal, values = vals,
+            title = "Temp",
+            labFormat = labelFormat(prefix = ""),
+            opacity = 1
+  )
+addMeasure(
+  position = "bottomleft",
+  primaryLengthUnit = "feet",
+  primaryAreaUnit = "sqmiles",
+  activeColor = "red",
+  completedColor = "green" ) %>%
+  leafem::addMouseCoordinates()
 
 # get mean temperature of all cells on a day (raster layer) --- we need a different time series method but this is a generic outline for testing
 timeseries_data <- function(pt_rast) {
-  agg <- pt_rast %>%
+  agg <- pt_raster %>%
     st_drop_geometry() %>%
     group_by(date) %>%
     mutate(mean = mean(tmax)) %>%
@@ -164,7 +184,7 @@ timeseries_data <- function(pt_rast) {
   agg
 }
 
-averages <- timeseries_data(pt_rast = pt_raster)
+ts <- timeseries_data(pt_rast = pt_raster)
 
 make_timeseries <- function(xts_df) {
   dygraph(data = dplyr::select(xts_df, mean)) %>%
@@ -174,7 +194,7 @@ make_timeseries <- function(xts_df) {
               fillGraph = TRUE)
 }
 
-make_timeseries(averages)
+make_timeseries(ts)
 
 
 

@@ -28,7 +28,7 @@ source('utils.R')
 ```
 
 ```{r context="server"}
-param_lst <- param_meta$terraclim$call
+# param_lst <- param_meta$terraclim$call
 #Initialize Maps 
 output$catchMap     <- renderLeaflet({ basemap() })
 output$catchMap2     <- renderLeaflet({ second_map() })
