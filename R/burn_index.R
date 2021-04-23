@@ -1,10 +1,10 @@
-
+library(raster)
 library(tidyverse)
 library(AOI)
 library(climateR)
 library(leaflet)
 library(sf)
-library(raster)
+
 library(dygraphs)
 
 
@@ -42,8 +42,25 @@ r <- climateR::getGridMET(AOI = bb,
 names(r) <- "burn_index"
 
 r2 <- plot(r[['burn_index']][[2]])
-plot(r2)
 
+
+r$
+agg <- tidy_stack(r, as_sf = TRUE)
+
+empty_raster <- raster::projectExtent(object = r$gridmet_burn_index[[1]],
+                                      crs = r$gridmet_burn_index@crs) %>%
+  raster::setValues(empty_raster, value = 0)
+
+# Convert points to sp
+agg2 <- as(agg, "Spatial")
+
+# rastorize prediction points into empty raster grid --- currently rasterizes "last" layer in stack
+r2 <- rasterize(agg2, empty_raster, field = "gridmet_burn_index")
+
+plot(r2)
+r <- click_to_raster(bb, "tmax",  start_date = "2001-08-01", end_date = "2001-08-01")
+
+r2 <- r$gridmet_tmax[[1]]
 agg <- aggregate_gridmet(bb, start_date = "2001-08-01", end_date = "2010-11-01")
 
 

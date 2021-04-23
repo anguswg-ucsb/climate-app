@@ -5,7 +5,7 @@ output:
   flexdashboard::flex_dashboard:
     navbar:
       - { icon: "fa-question-circle", href: "https://water.noaa.gov/about/nwm", align: right }
-    theme: cerulean
+    theme: united
     orientation: rows
     vertical_layout: fill
 ---
@@ -53,7 +53,7 @@ raster_data <- eventReactive(input$submitButton, {
   var <-  param()
   bb <- click_to_AOI(click_pt())
   print("click_to_raster")
-  click_to_raster(bb, "burn_index", dateRangeText1(), dateRangeText1())
+  r <- click_to_raster(bb, var, dateText1(), dateText1())
 })
 # point <- reactive({
 #     point <-  input$catchMap_click
@@ -64,7 +64,7 @@ raster_data <- eventReactive(input$submitButton, {
 
 
 
-climateR {data-icon="fa-tint"}
+Burndex {data-icon="fa-tint"}
 =====================================
 
 Inputs {.sidebar}
@@ -72,23 +72,23 @@ Inputs {.sidebar}
 
 ### Model Filters
 ```{r}
-dateRangeInput("dateRangeTS", label = "Date Input",
-          start = "1980-01-01",
-          end = "1985-02-01",
-               # value = (Sys.Date() -1),
-               min = "1980-01-01",
-          max = "2020-01-01",
-               # max = (Sys.Date() -1),
-               format = "yyyy mm dd",
-               weekstart = 1)
-# dateInput("dateTS", label = "Date Input",
-#           value = "2000-01-01",
+# dateRangeInput("dateRangeTS", label = "Date Input",
+#           start = "1980-01-01",
+#           end = "1985-02-01",
 #                # value = (Sys.Date() -1),
 #                min = "1980-01-01",
-#           max = "2010-01-01",
+#           max = "2020-01-01",
 #                # max = (Sys.Date() -1),
 #                format = "yyyy mm dd",
 #                weekstart = 1)
+dateInput("dateTS", label = "Date Input",
+          value = "2000-01-01",
+               # value = (Sys.Date() -1),
+               min = "1980-01-01",
+          max = "2010-01-01",
+               # max = (Sys.Date() -1),
+               format = "yyyy mm dd",
+               weekstart = 1)
 selectInput("variable1",
             label = "Variable", 
             choices = c('burn_index', 'prcp', 'rhmax',
@@ -193,43 +193,43 @@ observeEvent(input$submitButton, {
       print(var)
       # pred <- pointRaster()
         # r <- rast[[var]][[1]]
-      r <- raster_data
-      # r <- click_to_raster(bb, var, dateText1(), dateText2())
-      # r <- r[[var]][[1]]
+      r <- click_to_raster(bb, var, dateText1(), dateText1())
+      # r <- raster_data()
+      r <- r[[paste0("gridmet_", var)]][[1]]
       leafletProxy("catchMap2") %>%
           clearMarkers() %>%
           clearShapes() %>%
           clearImages() %>%
-          # addRasterImage(x = r) %>%
+          addRasterImage(x = r) %>%
         flyToBounds(bounds[1], bounds[2], bounds[3], bounds[4])
 
   }
 })
 
 # Testing reactive date inputs
-# dateText1 <- eventReactive(input$submitButton, {
-#     format.Date(input$dateTS)
+dateText1 <- eventReactive(input$submitButton, {
+    format.Date(input$dateTS)
+  })
+
+output$dateInputText1 <- renderText({
+   dateText1()
+  })
+
+# dateRangeText1 <- eventReactive(input$submitButton, {
+#     format.Date(input$dateRangeTS[1])
 #   })
 # 
-# output$dateInputText1 <- renderText({
-#    dateText1()
+# output$dateRangeInput1 <- renderText({
+#    dateRangeText1()
 #   })
-
-dateRangeText1 <- eventReactive(input$submitButton, {
-    format.Date(input$dateRangeTS[1])
-  })
-
-output$dateRangeInput1 <- renderText({
-   dateRangeText1()
-  })
-
-dateRangeText2 <- eventReactive(input$submitButton, {
-    format.Date(input$dateRangeTS[2])
-  })
-
-output$dateRangeInput2 <- renderText({
-   dateRangeText2()
-  })
+# 
+# dateRangeText2 <- eventReactive(input$submitButton, {
+#     format.Date(input$dateRangeTS[2])
+#   })
+# 
+# output$dateRangeInput2 <- renderText({
+#    dateRangeText2()
+#   })
 ```
 
 Row
@@ -240,10 +240,10 @@ Row
 ```
 
 ```{r context = "server"}
-tidy_data <- eventReactive(input$submitButton, {
-  tidy_stack(raster_data(), as_sf = TRUE)
-})
-# 
+# tidy_data <- eventReactive(input$submitButton, {
+#   tidy_stack(raster_data(), as_sf = TRUE)
+# })
+# # 
 # output$tidyDatatable <- DT::renderDT({
 #   df <- tidy_data() %>%
 #     st_drop_geometry()
@@ -253,7 +253,7 @@ tidy_data <- eventReactive(input$submitButton, {
 
 ### raster plot
 ```{r}
-plotOutput("rasterPlot")
+# plotOutput("rasterPlot")
 ```
 
 
@@ -272,39 +272,45 @@ plotOutput("rasterPlot")
 #   # rastorize prediction points into empty raster grid --- currently rasterizes "last" layer in stack
 #   rasterize(agg, empty_raster, field = var)
 # })
-layer <- eventReactive(input$submitButton,{
-  r <- raster_data()
+# 
+# output$rasterPlot <- renderPlot({
+#   r <- pointRaster()
+#   plot(r)
+# })
 
-})
-
-output$rasterPlot <- renderPlot({
-  r <- layer()
-  names(r) <- "burn_index"
-  plot(r[["burn_index"]][[1]])
-})
+# layer <- eventReactive(input$submitButton,{
+#   r <- raster_data()
+# 
+# })
+# 
+# output$rasterPlot <- renderPlot({
+#   r <- layer()
+#   names(r) <- "burn_index"
+#   plot(r[["burn_index"]][[1]])
+# })
 ```
 
 ### timeseries
 ```{r}
-dygraphOutput("predictionGraph")
+# dygraphOutput("predictionGraph")
 ```
 
 ```{r context = "server"}
-ts_data <- eventReactive(input$submitButton, {
-  bb <- click_to_AOI(click_pt())
- 
-  # maca <- aggregate_maca(bb, dateRangeText1(), dateRangeText2(), as_sf = FALSE)
-  # maca
-  clim <- climateR::getGridMET(AOI = pt, var, dateRangeText1(), dateRangeText2())
-  clim
-})
-
-output$predictionGraph <- renderDygraph({
-  var <- param()
-  df2 <- ts_data() 
-  ts <- timeseries_data(df2) %>% 
-    make_timeseries(var)
-})
+# ts_data <- eventReactive(input$submitButton, {
+#   bb <- click_to_AOI(click_pt())
+#  
+#   # maca <- aggregate_maca(bb, dateRangeText1(), dateRangeText2(), as_sf = FALSE)
+#   # maca
+#   clim <- climateR::getGridMET(AOI = pt, var, dateRangeText1(), dateRangeText2())
+#   clim
+# })
+# 
+# output$predictionGraph <- renderDygraph({
+#   var <- param()
+#   df2 <- ts_data() 
+#   ts <- timeseries_data(df2) %>% 
+#     make_timeseries(var)
+# })
 ```
 
 
